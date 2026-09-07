@@ -83,11 +83,77 @@ esphome run ge-fit-plus-ln-discovery.yaml
 
 Keep the Fit Profile app disconnected from the scale while testing so it does not compete for the BLE connection.
 
+## Add to an existing ESPHome deployment
+
+The component can be used from an existing ESPHome configuration in either of two ways.
+
+### Local component copy
+
+Copy the `components/ge_scale/` directory into the existing ESPHome configuration directory:
+
+```bash
+cp -a components/ge_scale /path/to/your/esphome-config/components/
+```
+
+Then add the BLE client and component blocks to the existing device YAML. Reuse the device's existing `esp32_ble_tracker` and `ble_client` blocks when they already exist.
+
+### Pinned Git component
+
+Alternatively, reference the published repository at a fixed release instead of `main`:
+
+```yaml
+external_components:
+  - source:
+      type: git
+      url: https://github.com/rgnv/HAOS-ESPHome-GE-Fit-Plus-LN
+      ref: v0.1.0
+    components: [ge_scale]
+```
+
+Add the component to the device configuration:
+
+```yaml
+time:
+  - platform: sntp
+    id: ge_scale_time
+
+esp32_ble_tracker:
+
+ble_client:
+  - mac_address: !secret ge_scale_mac
+    id: ge_scale_client
+    auto_connect: true
+
+ge_scale:
+  id: ge_scale_data
+  ble_client_id: ge_scale_client
+  time_id: ge_scale_time
+  height: !secret ge_scale_height_m
+  sex: !secret ge_scale_sex
+  birthday: !secret ge_scale_birthday
+  age: !secret ge_scale_age
+  filter_guests: false
+  write_back: false
+  weight:
+    name: "GE Fit Plus LN Weight"
+  measurement_id:
+    name: "GE Fit Plus LN Measurement ID"
+```
+
+Validate and compile the existing device as usual:
+
+```bash
+esphome config your-device.yaml
+esphome compile your-device.yaml
+```
+
+A tagged GitHub release contains CI-built validation binaries and checksums. Those binaries use CI placeholder credentials and are not configured for a specific household. For a real installation, compile the YAML with the local `secrets.yaml`, or use the existing ESPHome dashboard to build and install it.
+
 ## Secondary Linux Bluetooth adapter path
 
-The ESP32-C6 is the primary production bridge. A Linux Bluetooth adapter on PVE is a secondary diagnostic and fallback path. The adapter tools live in `tools/ble_adapter/` and use BlueZ through Bleak.
+The ESP32-C6 is the primary production bridge. A Linux Bluetooth adapter on a separate BlueZ-enabled host is a secondary diagnostic and fallback path. The adapter tools live in `tools/ble_adapter/` and use BlueZ through Bleak.
 
-On Debian 13/PVE:
+On Debian 13 or another BlueZ-enabled Linux host:
 
 ```bash
 sudo apt-get update
@@ -142,7 +208,7 @@ The address above is the currently observed device address; rescan if the scale 
 
 ## Home Assistant behavior
 
-The C6 connects directly to the scale and sends the decoded entities to Home Assistant over the ESPHome API. No PVE Bluetooth adapter is required for production operation.
+The C6 connects directly to the scale and sends the decoded entities to Home Assistant over the ESPHome API. No separate Linux Bluetooth adapter is required for production operation.
 
 The component sends four unlock/control frames required by the BLE protocol. Display-result write-back remains disabled by the device configuration.
 
