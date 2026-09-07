@@ -1,0 +1,12 @@
+# Local ESPHome secrets and generated files
+secrets.yaml
+captures/
+.venv/
+.venv-ble-adapter/
+.esphome/
+__pycache__/
+*.pyc
+build/
+*.bin
+*.elf
+*.map

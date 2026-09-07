@@ -1,0 +1,93 @@
+name: ESPHome build and release
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - master
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build ESP32-C6 firmware
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: write
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install pinned ESPHome
+        run: python -m pip install --upgrade pip esphome==2026.8.2
+
+      - name: Validate Linux adapter tool
+        run: |
+          python -m pip install -r tools/ble_adapter/requirements.txt
+          python -m py_compile tools/ble_adapter/ge_fit_plus_ln_probe.py
+          python tools/ble_adapter/ge_fit_plus_ln_probe.py --help
+
+      - name: Provide CI-only secrets
+        run: cp secrets.ci.yaml secrets.yaml
+
+      - name: Validate production configuration
+        run: esphome config ge-fit-plus-ln.yaml
+
+      - name: Validate discovery configuration
+        run: esphome config ge-fit-plus-ln-discovery.yaml
+
+      - name: Compile production firmware
+        run: esphome compile ge-fit-plus-ln.yaml
+
+      - name: Collect firmware artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          build_dir=.esphome/build/ge-fit-plus-ln/build
+          test -s "$build_dir/ge-fit-plus-ln.bin"
+          test -s "$build_dir/ge-fit-plus-ln.elf"
+          test -s "$build_dir/bootloader/bootloader.bin"
+          test -s "$build_dir/partition_table/partition-table.bin"
+
+          mkdir -p release-assets
+          cp "$build_dir/ge-fit-plus-ln.bin" release-assets/ge-fit-plus-ln.bin
+          cp "$build_dir/ge-fit-plus-ln.elf" release-assets/ge-fit-plus-ln.elf
+          cp "$build_dir/bootloader/bootloader.bin" release-assets/bootloader.bin
+          cp "$build_dir/partition_table/partition-table.bin" release-assets/partition-table.bin
+          printf 'commit=%s\nref=%s\nesphome=2026.8.2\nesp-idf=5.5.5\ntarget=esp32c6\n' \
+            "$(git rev-parse HEAD)" "$GITHUB_REF" > release-assets/build-info.txt
+          sha256sum release-assets/* > release-assets/sha256sums.txt
+
+      - name: Upload CI artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ge-fit-plus-ln-firmware-${{ github.sha }}
+          path: release-assets/
+          if-no-files-found: error
+
+      - name: Create tagged GitHub release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            release-assets/ge-fit-plus-ln.bin \
+            release-assets/ge-fit-plus-ln.elf \
+            release-assets/bootloader.bin \
+            release-assets/partition-table.bin \
+            release-assets/build-info.txt \
+            release-assets/sha256sums.txt \
+            --title "GE Fit Plus LN ESPHome $GITHUB_REF_NAME" \
+            --generate-notes
