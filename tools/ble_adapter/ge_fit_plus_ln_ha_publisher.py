@@ -163,26 +163,34 @@ class HomeAssistantPublisher:
         )
 
 
-async def resolve(address: str | None, name: str, timeout: float = 20.0) -> Any:
-    """Resolve the scale by its configured address, then by advertised name.
+async def resolve(address: str | None, name: str, timeout: float = 120.0) -> Any:
+    """Continuously resolve the scale by address or advertised name.
 
-    Some Android/BlueZ combinations expose the scale with a rotating address. The
-    configured address remains the preferred path, while the name fallback avoids
-    treating that privacy-address change as a permanently offline scale.
+    The scale advertises only briefly around a weigh-in. A continuous scanner avoids
+    the dead time between sequential address/name scans where a reading was missed.
     """
-    if address:
-        device = await BleakScanner.find_device_by_address(address, timeout=min(timeout, 8.0))
-        if device is not None:
-            return device
-
-    advertisements = await BleakScanner.discover(timeout=timeout, return_adv=True)
+    expected_address = address.upper() if address else None
     needle = name.lower().replace(" ", "")
-    for device, advertisement in advertisements.values():
+    loop = asyncio.get_running_loop()
+    found: asyncio.Future[Any] = loop.create_future()
+
+    def on_detected(device: Any, advertisement: Any) -> None:
         advertised_name = (advertisement.local_name or device.name or "").lower()
-        if needle in advertised_name.replace(" ", ""):
-            LOGGER.info("resolved scale by advertised name as %s", device.address)
-            return device
-    raise RuntimeError("scale was not advertising; wake it and retry")
+        address_match = expected_address and device.address.upper() == expected_address
+        name_match = needle in advertised_name.replace(" ", "")
+        if (address_match or name_match) and not found.done():
+            LOGGER.info("resolved scale as %s", device.address)
+            found.set_result(device)
+
+    scanner = BleakScanner(detection_callback=on_detected)
+    await scanner.start()
+    try:
+        try:
+            return await asyncio.wait_for(found, timeout=timeout)
+        except TimeoutError as exc:
+            raise RuntimeError("scale was not advertising; wake it and retry") from exc
+    finally:
+        await scanner.stop()
 
 
 async def capture_once(
