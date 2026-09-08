@@ -64,6 +64,9 @@ Z_MIN = 100
 Z_MAX = 1200
 MIN_WEIGHT_KG = 5.0
 MAX_WEIGHT_KG = 300.0
+STABLE_SECONDS = 18.0
+COMPUTING_TIMEOUT_SECONDS = 45.0
+WEIGHT_STABLE_DELTA_KG = 0.1
 
 
 @dataclass(frozen=True)
@@ -242,6 +245,47 @@ def compute_metrics(weight_kg: float, impedances: list[float], profile: Profile)
     }
 
 
+
+def compute_weight_only_metrics(weight_kg: float, profile: Profile) -> dict[str, Any]:
+    """Compute the anthropometric fallback when no result frame arrives."""
+    if not MIN_WEIGHT_KG <= weight_kg <= MAX_WEIGHT_KG:
+        raise ValueError("weight_kg is outside the supported range")
+    bmi = weight_kg / (profile.height_m * profile.height_m)
+    fat_pct = (
+        1.20 * bmi
+        + 0.23 * profile.age
+        - 10.8 * (1.0 if profile.sex == "male" else 0.0)
+        - 5.4
+    )
+    fat_pct = max(3.0, min(60.0, fat_pct))
+    ffm = weight_kg * (1.0 - fat_pct / 100.0)
+    water = FRAC_WATER * ffm
+    protein = FRAC_PROTEIN * ffm
+    bone = FRAC_BONE * ffm
+    smm = FRAC_SMM * ffm
+    bone_pct = 100.0 * bone / weight_kg
+    return {
+        "profile": profile.name,
+        "birthday": profile.birthday,
+        "age": profile.age,
+        "height_m": profile.height_m,
+        "sex": profile.sex,
+        "weight_kg": round(weight_kg, 3),
+        "weight_lb": round(weight_kg * LB_PER_KG, 3),
+        "bmi": round(bmi, 3),
+        "body_fat_percent": round(fat_pct, 3),
+        "body_water_percent": round(100.0 * water / weight_kg, 3),
+        "protein_percent": round(100.0 * protein / weight_kg, 3),
+        "bone_mass_percent": round(bone_pct, 3),
+        "muscle_mass_percent": round(100.0 - fat_pct - bone_pct, 3),
+        "skeletal_muscle_percent": round(100.0 * smm / weight_kg, 3),
+        "fat_free_mass_kg": round(ffm, 3),
+        "whole_body_impedance_ohm": None,
+        "impedance_ohm": [],
+        "source": "estimate",
+    }
+
+
 def build_display_frames(weight_kg: float, z_whole: int, profile: Profile) -> tuple[bytes, bytes]:
     if not Z_MIN <= z_whole <= Z_MAX:
         raise ValueError(f"whole-body impedance {z_whole} is outside the valid range")
@@ -319,6 +363,10 @@ async def capture(
         stream = None
     counts: Counter[str] = Counter()
     write_back_sent = False
+    last_live_weight: float | None = None
+    last_live_change: float | None = None
+    computing_started: float | None = None
+    result_seen = False
 
     def emit(row: dict[str, Any]) -> None:
         text = json.dumps(row, sort_keys=True)
@@ -336,15 +384,26 @@ async def capture(
         emit({"type": "display_writeback_complete", "frame": frame.hex(), "commit": commit.hex()})
 
     def callback(_: Any, data: bytearray) -> None:
-        nonlocal write_back_sent
+        nonlocal write_back_sent, last_live_weight, last_live_change, computing_started, result_seen
         payload = bytes(data)
         key = payload.hex()
         counts[key] += 1
         emit({"type": "notification", "monotonic": time.monotonic(), "data": key})
         decoded = decode_frame(payload, profile)
         if decoded is not None:
-            emit({"type": "decoded", "monotonic": time.monotonic(), **decoded})
-            if write_back and not write_back_sent and decoded.get("frame_type") == "result":
+            now = time.monotonic()
+            frame_type = decoded.get("frame_type")
+            if frame_type == "live_weight":
+                weight = float(decoded["weight_kg"])
+                if last_live_weight is None or abs(weight - last_live_weight) > WEIGHT_STABLE_DELTA_KG:
+                    last_live_change = now
+                last_live_weight = weight
+            elif frame_type == "computing" and computing_started is None:
+                computing_started = now
+            elif frame_type == "result":
+                result_seen = True
+            emit({"type": "decoded", "monotonic": now, **decoded})
+            if write_back and not write_back_sent and frame_type == "result":
                 write_back_sent = True
                 impedances = decoded["impedance_ohm"]
                 z_whole = round(sum(impedances) / 4.0)
@@ -364,6 +423,22 @@ async def capture(
                 await asyncio.sleep(0.2)
             emit({"type": "handshake_complete"})
         await asyncio.sleep(seconds)
+        if not result_seen and last_live_weight is not None and last_live_change is not None:
+            now = time.monotonic()
+            stable_for = now - last_live_change
+            computing_for = now - computing_started if computing_started is not None else None
+            if stable_for >= STABLE_SECONDS and (
+                computing_for is None or computing_for >= COMPUTING_TIMEOUT_SECONDS
+            ):
+                fallback: dict[str, Any] = {
+                    "frame_type": "weight_only_result",
+                    "weight_kg": round(last_live_weight, 3),
+                    "source": "estimate",
+                    "stable_seconds": round(stable_for, 1),
+                }
+                if profile is not None:
+                    fallback["metrics"] = compute_weight_only_metrics(last_live_weight, profile)
+                emit({"type": "decoded", "monotonic": now, **fallback})
     finally:
         try:
             if client.is_connected:

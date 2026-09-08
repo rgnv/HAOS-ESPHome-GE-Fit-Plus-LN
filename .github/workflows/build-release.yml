@@ -38,6 +38,7 @@ jobs:
           python -m pip install -r tools/ble_adapter/requirements.txt
           python -m py_compile tools/ble_adapter/ge_fit_plus_ln_probe.py
           python tools/ble_adapter/ge_fit_plus_ln_probe.py --help
+          python -m unittest tools/ble_adapter/test_probe.py
 
       - name: Provide CI-only secrets
         run: cp secrets.ci.yaml secrets.yaml

@@ -217,6 +217,8 @@ python tools/ble_adapter/ge_fit_plus_ln_probe.py capture \\
   --output captures/fit-plus-ln-read-only.jsonl
 ```
 
+When the scale emits stable `0x10` live-weight frames but no full `0xB1` impedance result, the adapter emits a terminal `weight_only_result` after the documented stability/timeout window. With a profile, that event includes the same explicitly estimated body-composition metrics used by the ESPHome fallback; impedance fields remain empty rather than fabricated.
+
 If the scale is awake but does not emit result frames passively, explicitly request the protocol unlock sequence:
 
 ```bash
