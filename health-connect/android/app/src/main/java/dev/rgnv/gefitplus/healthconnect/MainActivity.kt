@@ -78,9 +78,10 @@ class MainActivity : AppCompatActivity() {
         status = TextView(this).apply { setPadding(0, dp(14), 0, 0) }
         content.addView(status, matchWrap())
         setContentView(ScrollView(this).apply { addView(content) })
+        val imported = SyncConfig.importAdbConfig(this)
         urlInput.setText(SyncConfig.getUrl(this))
         tokenInput.setText(SyncConfig.getToken(this))
-        showStatus("Ready. Save settings, grant Health Connect permission, then sync.")
+        showStatus(if (imported) "HA settings imported securely. Save to enable periodic sync." else "Ready. Save settings, grant Health Connect permission, then sync.")
     }
 
     private fun saveAndSchedule() {
@@ -105,7 +106,10 @@ class MainActivity : AppCompatActivity() {
             showStatus("Save the HA URL and token first.")
             return
         }
-        permissionLauncher.launch(setOf(HealthPermission.getWritePermission(WeightRecord::class)))
+        permissionLauncher.launch(setOf(
+            HealthPermission.getWritePermission(WeightRecord::class),
+            HealthPermission.getReadPermission(WeightRecord::class)
+        ))
     }
 
     private fun syncNow() {
