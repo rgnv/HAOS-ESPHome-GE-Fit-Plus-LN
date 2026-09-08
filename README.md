@@ -235,9 +235,34 @@ The `--handshake` mode sends only the four protocol unlock/control frames. Add `
 
 Replace `YOUR_SCALE_MAC` with the address returned by `scan`; rescan if the scale advertises a different address.
 
+### Continuous Home Assistant publisher
+
+`tools/ble_adapter/ge_fit_plus_ln_ha_publisher.py` is the continuous Linux-adapter
+fallback. It reconnects to the configured scale, sends the unlock handshake, derives
+weight/body-composition metrics, and publishes the `sensor.ge_fit_plus_ln_*` states to
+Home Assistant through the REST API. It uses a local profile and token; neither belongs
+in Git.
+
+The repository includes `systemd/ge-fit-plus-ln.service` as a deployment template. On
+the BlueZ host, install the repository under `/opt/ge-fit-plus-ln`, create a root-only
+`/etc/ge-fit-plus-ln/ha.env` containing `GE_SCALE_MAC`, `GE_SCALE_PROFILE`, `HA_URL`,
+and `HASS_TOKEN`, then enable the service:
+
+```bash
+sudo install -d -m 700 /etc/ge-fit-plus-ln
+sudo install -m 644 systemd/ge-fit-plus-ln.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now ge-fit-plus-ln.service
+```
+
+The REST publisher creates the state entities on its first successful reading, so the
+HA dashboard and the measurement-ID automation can use the same entity IDs as the
+ESPHome path. It is a fallback publisher, not a second simultaneous BLE client; keep
+Fit Profile disconnected while it is capturing.
+
 ## Home Assistant behavior
 
-The C6 connects directly to the scale and sends the decoded entities to Home Assistant over the ESPHome API. No separate Linux Bluetooth adapter is required for production operation.
+The C6 connects directly to the scale and sends the decoded entities to Home Assistant over the ESPHome API. The Linux adapter publisher is a separate fallback when the scale is serviced by a BlueZ host instead of the C6.
 
 The component sends four unlock/control frames required by the BLE protocol. Display-result write-back remains disabled by the device configuration.
 

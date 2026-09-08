@@ -1,0 +1,16 @@
+[Unit]
+Description=GE Fit Plus LN Bluetooth to Home Assistant publisher
+After=bluetooth.service network-online.target
+Wants=bluetooth.service network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/ge-fit-plus-ln/tools/ble_adapter
+EnvironmentFile=/etc/ge-fit-plus-ln/ha.env
+ExecStart=/usr/bin/python3 /opt/ge-fit-plus-ln/tools/ble_adapter/ge_fit_plus_ln_ha_publisher.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
