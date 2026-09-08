@@ -1,0 +1,24 @@
+# Optional Home Assistant package for GE Fit Plus LN.
+# Include this file from configuration.yaml only after the ESPHome device is online.
+
+automation:
+  - id: ge_fit_plus_ln_measurement_log
+    alias: GE Fit Plus LN - log every measurement
+    description: Create a logbook entry for every measurement sequence, including repeated weights.
+    mode: queued
+    trigger:
+      - platform: state
+        entity_id: sensor.ge_fit_plus_ln_measurement_id
+    condition:
+      - condition: template
+        value_template: >-
+          {{ trigger.to_state.state not in ['unknown', 'unavailable', 'none'] }}
+    action:
+      - service: logbook.log
+        data:
+          name: GE Fit Plus LN
+          entity_id: sensor.ge_fit_plus_ln_weight
+          message: >-
+            {{ states('sensor.ge_fit_plus_ln_weight') }} kg;
+            BMI {{ states('sensor.ge_fit_plus_ln_bmi') }};
+            body fat {{ states('sensor.ge_fit_plus_ln_body_fat') }}%.

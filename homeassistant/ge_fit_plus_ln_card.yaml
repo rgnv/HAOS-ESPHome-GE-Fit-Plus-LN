@@ -1,0 +1,33 @@
+type: vertical-stack
+cards:
+  - type: entities
+    title: GE Fit Plus LN
+    show_header_toggle: false
+    entities:
+      - entity: sensor.ge_fit_plus_ln_weight
+        name: Weight
+      - entity: sensor.ge_fit_plus_ln_weight_lb
+        name: Weight (lb)
+      - entity: sensor.ge_fit_plus_ln_bmi
+        name: BMI
+      - entity: sensor.ge_fit_plus_ln_body_fat
+        name: Body fat
+      - entity: sensor.ge_fit_plus_ln_body_water
+        name: Body water
+      - entity: sensor.ge_fit_plus_ln_muscle_mass
+        name: Muscle mass
+      - entity: sensor.ge_fit_plus_ln_bone_mass
+        name: Bone mass
+      - entity: sensor.ge_fit_plus_ln_fat_free_mass
+        name: Fat-free mass
+      - entity: sensor.ge_fit_plus_ln_whole_body_impedance
+        name: Whole-body impedance
+      - entity: sensor.ge_fit_plus_ln_measurement_id
+        name: Measurement ID
+  - type: history-graph
+    title: GE Fit Plus LN history
+    hours_to_show: 168
+    entities:
+      - sensor.ge_fit_plus_ln_weight
+      - sensor.ge_fit_plus_ln_body_fat
+      - sensor.ge_fit_plus_ln_bmi

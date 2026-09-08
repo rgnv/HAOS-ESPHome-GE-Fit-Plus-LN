@@ -1,6 +1,7 @@
 # Local ESPHome secrets and generated files
 secrets.yaml
 captures/
+profiles/
 .venv/
 .venv-ble-adapter/
 .esphome/

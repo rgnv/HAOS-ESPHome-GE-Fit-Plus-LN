@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "GE Fit Plus LN measurement event",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["measurement_id", "measured_at", "weight_kg", "source"],
+  "properties": {
+    "measurement_id": {"type": "integer", "minimum": 0},
+    "measured_at": {"type": "string", "format": "date-time"},
+    "weight_kg": {"type": "number", "exclusiveMinimum": 0, "maximum": 300},
+    "body_fat_percent": {"type": "number", "minimum": 0, "maximum": 100},
+    "body_water_percent": {"type": "number", "minimum": 0, "maximum": 100},
+    "fat_free_mass_kg": {"type": "number", "exclusiveMinimum": 0, "maximum": 300},
+    "bmi": {"type": "number", "exclusiveMinimum": 0, "maximum": 100},
+    "source": {"enum": ["bia", "estimate", "unknown"]}
+  }
+}
