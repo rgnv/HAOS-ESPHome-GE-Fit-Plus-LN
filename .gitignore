@@ -8,6 +8,10 @@ profiles/
 __pycache__/
 *.pyc
 build/
+.gradle/
+local.properties
+*.apk
+*.aab
 *.bin
 *.elf
 *.map

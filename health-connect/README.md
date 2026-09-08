@@ -36,9 +36,27 @@ The official Jetpack client is `androidx.health.connect:connect-client`; the exa
 
 ## Local configuration
 
-The Android bridge will require a user-entered HA HTTPS URL and a narrowly scoped HA token. Those values must be stored in Android app-private encrypted storage and must never be placed in this repository, an APK release, or CI logs.
+The repository now contains a minimal Android bridge under `android/`. The debug APK
+was built and installed on the Xperia through its paired wireless ADB connection. It
+currently writes the scale's `WeightRecord`; body-fat and glucose records remain
+separate follow-up scopes.
 
-The public event contract is [measurement.schema.json](measurement.schema.json).
+On first launch:
+
+1. Enter the HA URL and a narrowly scoped HA long-lived token in the app UI.
+2. Tap **Save and enable periodic sync**.
+3. Tap **Grant Health Connect weight permission** and approve it in Health Connect.
+4. Tap **Sync now** to verify the first record.
+
+The app stores the URL/token with Android encrypted app-private preferences and keeps a
+measurement-ID dedupe value so a weigh-in is written once. The HA token is never part
+of this repository or APK build configuration.
+
+Build locally with the Gradle wrapper/toolchain used by CI, then install the generated
+`app/build/outputs/apk/debug/app-debug.apk` only through a trusted ADB session.
+
+The public event contract remains [measurement.schema.json](measurement.schema.json).
+
 
 ## Official references
 
