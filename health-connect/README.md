@@ -1,6 +1,6 @@
 # Google Health Connect bridge (phase 2)
 
-Health Connect is an on-device Android data store. Home Assistant cannot write to it directly from HAOS; the bridge must run on the Xperia as an Android companion app.
+Health Connect is an on-device Android data store. Home Assistant cannot write to it directly from HAOS; the bridge must run in a separate Android app.
 
 ## Current scope
 
@@ -14,7 +14,7 @@ The bridge will keep BMI, raw impedance, and the remaining percentage metrics in
 ## Sync design
 
 1. The ESPHome device publishes a new `measurement_id` for each completed weigh-in.
-2. The Xperia bridge polls the HA REST API over HTTPS for the measurement ID and related sensor states.
+2. The Android bridge polls the HA REST API over HTTPS for the measurement ID and related sensor states.
 3. It uses the measurement ID plus HA timestamp and source as the local deduplication key.
 4. It writes the confirmed values to Health Connect with metadata identifying the GE Fit Plus LN source.
 5. The last successfully synced ID is stored in Android app-private storage.

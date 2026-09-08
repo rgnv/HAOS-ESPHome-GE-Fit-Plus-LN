@@ -158,11 +158,11 @@ ESPHome native API discovery creates the device and sensor entities automaticall
 
 To use them, include the package from the HA configuration and paste the card YAML into a dashboard. Home Assistant Recorder normally records enabled ESPHome sensors automatically; the measurement-ID logbook automation preserves a distinct event for every weigh-in.
 
-The public and CI configurations keep `write_back` disabled. Ron's ignored local `secrets.yaml` sets `ge_scale_write_back: true` for his installation only.
+The public and CI configurations keep `write_back` disabled. A private deployment may set `ge_scale_write_back: true` in its ignored local `secrets.yaml`.
 
 ## Google Health Connect integration (phase 2)
 
-The Health Connect bridge design and event schema are in `health-connect/`. The Android companion will run on the Xperia, poll the HA measurement ID, deduplicate locally, and initially write WeightRecord and BodyFatRecord with minimal permissions. It is intentionally separate from HAOS because Health Connect is an Android on-device API.
+The Health Connect bridge design and event schema are in `health-connect/`. A separate Android companion app will poll the HA measurement ID, deduplicate locally, and initially write WeightRecord and BodyFatRecord with minimal permissions. It is intentionally separate from HAOS because Health Connect is an Android on-device API.
 
 ## Secondary Linux Bluetooth adapter path
 
@@ -189,7 +189,7 @@ Create a local profile file from the public template. The `profiles/` directory 
 
 ```bash
 mkdir -p profiles
-cp profile.example.json profiles/ron.json
+cp profile.example.json profiles/my-profile.json
 ```
 
 Set the profile values to the same values used by the ESPHome device. The adapter calculates age from the birthday when `age` is omitted.
@@ -204,16 +204,16 @@ Inspect GATT without pairing or writing:
 
 ```bash
 python tools/ble_adapter/ge_fit_plus_ln_probe.py inspect \\
-  --address FF:05:00:16:79:2D
+  --address YOUR_SCALE_MAC
 ```
 
 Capture notifications without writing anything:
 
 ```bash
 python tools/ble_adapter/ge_fit_plus_ln_probe.py capture \\
-  --address FF:05:00:16:79:2D \\
+  --address YOUR_SCALE_MAC \\
   --seconds 90 \\
-  --profile profiles/ron.json \\
+  --profile profiles/my-profile.json \\
   --output captures/fit-plus-ln-read-only.jsonl
 ```
 
@@ -221,9 +221,9 @@ If the scale is awake but does not emit result frames passively, explicitly requ
 
 ```bash
 python tools/ble_adapter/ge_fit_plus_ln_probe.py capture \\
-  --address FF:05:00:16:79:2D \\
+  --address YOUR_SCALE_MAC \\
   --seconds 90 \\
-  --profile profiles/ron.json \\
+  --profile profiles/my-profile.json \\
   --handshake \\
   --write-back \\
   --output captures/fit-plus-ln-handshake.jsonl
@@ -231,7 +231,7 @@ python tools/ble_adapter/ge_fit_plus_ln_probe.py capture \\
 
 The `--handshake` mode sends only the four protocol unlock/control frames. Add `--write-back` only when you explicitly want computed display frames sent to the scale; it requires both `--profile` and `--handshake`. Do not run it while Fit Profile is connected to the scale.
 
-The address above is the currently observed device address; rescan if the scale advertises a different address.
+Replace `YOUR_SCALE_MAC` with the address returned by `scan`; rescan if the scale advertises a different address.
 
 ## Home Assistant behavior
 
