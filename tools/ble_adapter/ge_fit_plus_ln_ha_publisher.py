@@ -246,12 +246,19 @@ async def capture_once(
                 publish_task = asyncio.create_task(publish_metrics(metrics))
 
     try:
-        await client.connect()
+        async with asyncio.timeout(20):
+            await client.connect()
         LOGGER.info("connected to scale")
-        await client.start_notify(NOTIFY_UUID, on_notification)
+        LOGGER.info("starting notifications")
+        async with asyncio.timeout(15):
+            await client.start_notify(NOTIFY_UUID, on_notification)
+        LOGGER.info("notifications started")
+        LOGGER.info("sending handshake")
         for frame in HANDSHAKE:
-            await client.write_gatt_char(WRITE_UUID, frame, response=True)
+            async with asyncio.timeout(10):
+                await client.write_gatt_char(WRITE_UUID, frame, response=True)
             await asyncio.sleep(0.2)
+        LOGGER.info("handshake complete; listening for %.0f seconds", capture_seconds)
         await asyncio.sleep(capture_seconds)
         if not result_seen and last_live_weight is not None and last_live_change is not None:
             now = time.monotonic()
@@ -274,10 +281,15 @@ async def capture_once(
     finally:
         if client.is_connected:
             try:
-                await client.stop_notify(NOTIFY_UUID)
+                async with asyncio.timeout(10):
+                    await client.stop_notify(NOTIFY_UUID)
             except Exception:
-                pass
-            await client.disconnect()
+                LOGGER.debug("notification cleanup failed", exc_info=True)
+            try:
+                async with asyncio.timeout(10):
+                    await client.disconnect()
+            except Exception:
+                LOGGER.debug("BLE disconnect cleanup failed", exc_info=True)
 
 
 async def run_forever(

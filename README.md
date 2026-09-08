@@ -249,6 +249,8 @@ make the scale look permanently offline. Once connected, it keeps the BLE sessio
 for five minutes so a delayed step-on cannot land in the old scan gap. Each session logs
 notification count, decoded live-weight/result state, and whether the HA REST publish
 completed; REST failures are logged with a traceback instead of being lost in a task.
+Connect, notification subscription, handshake writes, and cleanup each have bounded
+timeouts so a stale BlueZ GATT operation returns to the discovery loop.
 
 The repository includes `systemd/ge-fit-plus-ln.service` as a deployment template. On
 the BlueZ host, install the repository under `/opt/ge-fit-plus-ln`, create a root-only
