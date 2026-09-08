@@ -19,14 +19,15 @@ import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 import java.time.Instant
+import java.time.ZoneId
 import java.time.ZoneOffset
 
 class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result = try {
-        sync(applicationContext)
+        SyncEngine.syncOnce(applicationContext)
         Log.i(TAG, "sync completed")
         Result.success()
-    } catch (_: MissingPermissionException) {
+    } catch (_: SyncEngine.MissingPermissionException) {
         Log.e(TAG, "sync blocked: Health Connect write permission is not granted")
         Result.failure()
     } catch (e: Exception) {
@@ -34,7 +35,13 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
         Result.retry()
     }
 
-    private suspend fun sync(context: Context) = withContext(Dispatchers.IO) {
+    companion object {
+        private const val TAG = "GeFitHealthConnect"
+    }
+}
+
+internal object SyncEngine {
+    suspend fun syncOnce(context: Context) = withContext(Dispatchers.IO) {
         val base = SyncConfig.getUrl(context)
         val token = SyncConfig.getToken(context)
         check(base.isNotEmpty() && token.isNotEmpty()) { "sync is not configured" }
@@ -75,13 +82,13 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
             ?: Instant.now()
         val record = WeightRecord(
             time = time,
-            zoneOffset = ZoneOffset.UTC,
+            zoneOffset = healthOffset(time),
             weight = Mass.kilograms(kilograms),
             metadata = Metadata.manualEntry()
         )
         client.insertRecords(listOf(record))
         SyncConfig.setLastMeasurement(context, measurementId)
-        Log.i(TAG, "wrote WeightRecord measurement_id=$measurementId")
+        Log.i(TAG, "wrote WeightRecord measurement_id=$measurementId offset=${healthOffset(time)}")
         verifyRecentWeight(client, granted)
     }
 
@@ -110,7 +117,7 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
         }
         val record = BloodGlucoseRecord(
             time = time,
-            zoneOffset = ZoneOffset.UTC,
+            zoneOffset = healthOffset(time),
             metadata = Metadata.manualEntry(),
             level = BloodGlucose.milligramsPerDeciliter(value),
             specimenSource = BloodGlucoseRecord.SPECIMEN_SOURCE_INTERSTITIAL_FLUID,
@@ -119,7 +126,7 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
         )
         client.insertRecords(listOf(record))
         SyncConfig.setLastGlucose(context, key)
-        Log.i(TAG, "wrote BloodGlucoseRecord measured_at=$time value_mgdl=$value")
+        Log.i(TAG, "wrote BloodGlucoseRecord measured_at=$time offset=${healthOffset(time)} value_mgdl=$value")
         verifyRecentGlucose(client, granted)
     }
 
@@ -132,7 +139,8 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
         val response = client.readRecords(
             ReadRecordsRequest(WeightRecord::class, TimeRangeFilter.after(Instant.now().minusSeconds(86_400)))
         )
-        Log.i(TAG, "verified Health Connect WeightRecord count=${response.records.size}")
+        val latest = response.records.maxByOrNull { it.time }
+        Log.i(TAG, "verified Health Connect WeightRecord count=${response.records.size} latest_offset=${latest?.zoneOffset}")
     }
 
     private suspend fun verifyRecentGlucose(client: HealthConnectClient, granted: Set<String>) {
@@ -144,8 +152,11 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
         val response = client.readRecords(
             ReadRecordsRequest(BloodGlucoseRecord::class, TimeRangeFilter.after(Instant.now().minusSeconds(86_400)))
         )
-        Log.i(TAG, "verified Health Connect BloodGlucoseRecord count=${response.records.size}")
+        val latest = response.records.maxByOrNull { it.time }
+        Log.i(TAG, "verified Health Connect BloodGlucoseRecord count=${response.records.size} latest_offset=${latest?.zoneOffset}")
     }
+
+    private fun healthOffset(time: Instant): ZoneOffset = HEALTH_ZONE.rules.getOffset(time)
 
     private fun getJson(base: String, token: String, path: String): JSONObject {
         val connection = URL(base.trimEnd('/') + path).openConnection() as HttpURLConnection
@@ -161,10 +172,9 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
         }
     }
 
-    private class MissingPermissionException : Exception()
+    class MissingPermissionException : Exception()
 
-    companion object {
-        private const val TAG = "GeFitHealthConnect"
-        private const val PROVIDER = "com.google.android.healthconnect.controller"
-    }
+    private const val TAG = "GeFitHealthConnect"
+    private const val PROVIDER = "com.google.android.healthconnect.controller"
+    private val HEALTH_ZONE: ZoneId = ZoneId.of("America/Los_Angeles")
 }

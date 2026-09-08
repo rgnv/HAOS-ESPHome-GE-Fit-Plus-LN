@@ -1,5 +1,6 @@
 package dev.rgnv.gefitplus.healthconnect
 
+import android.content.Intent
 import android.os.Bundle
 import android.text.InputType
 import android.view.ViewGroup
@@ -9,6 +10,7 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.appcompat.app.AppCompatActivity
 import androidx.health.connect.client.PermissionController
 import androidx.health.connect.client.permission.HealthPermission
@@ -32,9 +34,9 @@ class MainActivity : AppCompatActivity() {
         )
     ) { granted: Set<String> ->
         if (granted.contains(HealthPermission.getWritePermission(WeightRecord::class))) {
-            showStatus("Weight write permission granted. Tap Sync now to test.")
+            showStatus("Health Connect permissions granted. Continuous sync is ready.")
         } else {
-            showStatus("Health Connect weight permission was not granted.")
+            showStatus("Required Health Connect permissions were not granted.")
         }
     }
 
@@ -65,11 +67,11 @@ class MainActivity : AppCompatActivity() {
         }
         content.addView(tokenInput, marginParams(0, 10, 0, 10))
         content.addView(Button(this).apply {
-            text = "Save and enable periodic sync"
+            text = "Save and start continuous sync"
             setOnClickListener { saveAndSchedule() }
         }, matchWrap())
         content.addView(Button(this).apply {
-            text = "Grant Health Connect weight permission"
+            text = "Grant Health Connect permissions"
             setOnClickListener { requestPermissions() }
         }, marginParams(0, 10, 0, 0))
         content.addView(Button(this).apply {
@@ -82,7 +84,8 @@ class MainActivity : AppCompatActivity() {
         val imported = SyncConfig.importAdbConfig(this)
         urlInput.setText(SyncConfig.getUrl(this))
         tokenInput.setText(SyncConfig.getToken(this))
-        showStatus(if (imported) "HA settings imported securely. Save to enable periodic sync." else "Ready. Save settings, grant Health Connect permission, then sync.")
+        if (SyncConfig.hasConfig(this)) startContinuousSync()
+        showStatus(if (imported) "HA settings imported securely. Continuous sync started." else "Ready. Continuous sync runs every 2 minutes while active.")
     }
 
     private fun saveAndSchedule() {
@@ -99,7 +102,8 @@ class MainActivity : AppCompatActivity() {
         WorkManager.getInstance(this).enqueueUniquePeriodicWork(
             "ge_fit_plus_health_connect_periodic", ExistingPeriodicWorkPolicy.UPDATE, request
         )
-        showStatus("Saved. Periodic sync is enabled; Android may batch the 15-minute schedule.")
+        startContinuousSync()
+        showStatus("Saved. Continuous sync is active and checks every 2 minutes; WorkManager remains as a fallback.")
     }
 
     private fun requestPermissions() {
@@ -113,6 +117,10 @@ class MainActivity : AppCompatActivity() {
             HealthPermission.getWritePermission(BloodGlucoseRecord::class),
             HealthPermission.getReadPermission(BloodGlucoseRecord::class)
         ))
+    }
+
+    private fun startContinuousSync() {
+        ContextCompat.startForegroundService(this, Intent(this, SyncService::class.java))
     }
 
     private fun syncNow() {

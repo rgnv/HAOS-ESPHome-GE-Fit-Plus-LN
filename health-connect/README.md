@@ -16,12 +16,13 @@ enabling them. Gluroo CGM values are written as interstitial-fluid glucose recor
 ## Sync design
 
 1. The ESPHome device publishes a new `measurement_id` for each completed weigh-in.
-2. The Android bridge polls the HA REST API over HTTPS for the measurement ID and related sensor states.
-3. It uses the measurement ID plus HA timestamp and source as the local deduplication key.
-4. It writes the confirmed values to Health Connect with metadata identifying the GE Fit Plus LN source.
-5. The last successfully synced ID is stored in Android app-private storage.
+2. A visible Android foreground service polls the HA REST API every 2 minutes for the measurement ID and related sensor states. WorkManager remains a 15-minute fallback for periods when Android stops the foreground service.
+3. It uses the measurement ID for scale records and timestamp plus value for glucose deduplication.
+4. It writes confirmed values to Health Connect with a `ZoneOffset` for `America/Los_Angeles`, selected from the original UTC sample time so daylight-saving changes are handled correctly.
+5. The last successfully synced keys are stored in Android encrypted app-private storage.
+6. The foreground notification restarts after app update or device boot when configuration is present.
 
-A future push-triggered path can reduce polling latency, but polling is the initial reliable implementation.
+The service keeps a partial wake lock while active so the two-minute polling loop is not suspended during ordinary screen-off operation. Android force-stop, revoked permissions, or loss of network can still stop logging and must be visible in the notification/logs.
 
 ## Minimum Health Connect permissions
 
@@ -43,21 +44,21 @@ The official Jetpack client is `androidx.health.connect:connect-client`; the exa
 
 ## Local configuration
 
-The repository now contains a minimal Android bridge under `android/`. The debug APK
-was built and installed on an Android companion device through its paired wireless ADB connection. It
-currently writes the scale's `WeightRecord`; body-fat and glucose records remain
-separate follow-up scopes.
+The repository contains an Android bridge under `android/`. It writes scale `WeightRecord` and Gluroo `BloodGlucoseRecord` data. Body-fat and the remaining composition metrics remain HA-only.
 
 On first launch:
 
 1. Enter the HA URL and a narrowly scoped HA long-lived token in the app UI.
-2. Tap **Save and enable periodic sync**.
-3. Tap **Grant Health Connect weight permission** and approve it in Health Connect.
-4. Tap **Sync now** to verify the first record.
+2. Tap **Save and start continuous sync**.
+3. Tap **Grant Health Connect permissions** and approve weight and blood-glucose access in Health Connect.
+4. Confirm the ongoing **Health Connect sync active** notification.
+5. Tap **Sync now** to verify the first record if needed.
 
-The app stores the URL/token with Android encrypted app-private preferences and keeps a
-measurement-ID dedupe value so a weigh-in is written once. The HA token is never part
-of this repository or APK build configuration.
+The app stores the URL/token with Android encrypted app-private preferences and keeps
+dedupe keys so each weigh-in or glucose sample is written once. The HA token is never
+part of this repository or APK build configuration. New glucose and weight records use
+the America/Los_Angeles Health Connect offset; previously written records are not
+rewritten automatically.
 
 Build locally with the Gradle wrapper/toolchain used by CI, then install the generated
 `app/build/outputs/apk/debug/app-debug.apk` only through a trusted ADB session.
