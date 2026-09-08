@@ -149,20 +149,36 @@ class HomeAssistantPublisher:
         )
 
 
-async def resolve(address: str, timeout: float = 20.0) -> Any:
-    device = await BleakScanner.find_device_by_address(address, timeout=timeout)
-    if device is None:
-        raise RuntimeError("scale was not advertising; wake it and retry")
-    return device
+async def resolve(address: str | None, name: str, timeout: float = 20.0) -> Any:
+    """Resolve the scale by its configured address, then by advertised name.
+
+    Some Android/BlueZ combinations expose the scale with a rotating address. The
+    configured address remains the preferred path, while the name fallback avoids
+    treating that privacy-address change as a permanently offline scale.
+    """
+    if address:
+        device = await BleakScanner.find_device_by_address(address, timeout=min(timeout, 8.0))
+        if device is not None:
+            return device
+
+    advertisements = await BleakScanner.discover(timeout=timeout, return_adv=True)
+    needle = name.lower().replace(" ", "")
+    for device, advertisement in advertisements.values():
+        advertised_name = (advertisement.local_name or device.name or "").lower()
+        if needle in advertised_name.replace(" ", ""):
+            LOGGER.info("resolved scale by advertised name as %s", device.address)
+            return device
+    raise RuntimeError("scale was not advertising; wake it and retry")
 
 
 async def capture_once(
-    address: str,
+    address: str | None,
+    name: str,
     profile: Profile,
     publisher: HomeAssistantPublisher,
     capture_seconds: float,
 ) -> bool:
-    device = await resolve(address)
+    device = await resolve(address, name)
     client = BleakClient(device, timeout=20)
     last_live_weight: float | None = None
     last_live_change: float | None = None
@@ -226,10 +242,16 @@ async def capture_once(
             await client.disconnect()
 
 
-async def run_forever(address: str, profile: Profile, publisher: HomeAssistantPublisher, retry_seconds: float) -> None:
+async def run_forever(
+    address: str | None,
+    name: str,
+    profile: Profile,
+    publisher: HomeAssistantPublisher,
+    retry_seconds: float,
+) -> None:
     while True:
         try:
-            await capture_once(address, profile, publisher, MAX_CAPTURE_SECONDS)
+            await capture_once(address, name, profile, publisher, MAX_CAPTURE_SECONDS)
         except asyncio.CancelledError:
             raise
         except Exception as exc:
@@ -239,7 +261,8 @@ async def run_forever(address: str, profile: Profile, publisher: HomeAssistantPu
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--address", default=os.environ.get("GE_SCALE_MAC"), required=not os.environ.get("GE_SCALE_MAC"))
+    parser.add_argument("--address", default=os.environ.get("GE_SCALE_MAC"))
+    parser.add_argument("--name", default=os.environ.get("GE_SCALE_NAME", "Fit Plus"))
     parser.add_argument("--profile", type=Path, default=Path(os.environ.get("GE_SCALE_PROFILE", "profile.json")))
     parser.add_argument("--ha-url", default=os.environ.get("HA_URL", "http://10.0.0.123:8123"))
     parser.add_argument("--ha-token", default=os.environ.get("HASS_TOKEN"))
@@ -252,7 +275,7 @@ def main() -> int:
     profile = Profile.from_json(args.profile)
     publisher = HomeAssistantPublisher(args.ha_url, args.ha_token)
     try:
-        asyncio.run(run_forever(args.address, profile, publisher, args.retry_seconds))
+        asyncio.run(run_forever(args.address, args.name, profile, publisher, args.retry_seconds))
     except KeyboardInterrupt:
         return 130
     return 0

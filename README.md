@@ -243,6 +243,10 @@ weight/body-composition metrics, and publishes the `sensor.ge_fit_plus_ln_*` sta
 Home Assistant through the REST API. It uses a local profile and token; neither belongs
 in Git.
 
+It first resolves the configured address and then falls back to scanning for the
+configured advertised name (default `Fit Plus`) so a rotating privacy address does not
+make the scale look permanently offline.
+
 The repository includes `systemd/ge-fit-plus-ln.service` as a deployment template. On
 the BlueZ host, install the repository under `/opt/ge-fit-plus-ln`, create a root-only
 `/etc/ge-fit-plus-ln/ha.env` containing `GE_SCALE_MAC`, `GE_SCALE_PROFILE`, `HA_URL`,
