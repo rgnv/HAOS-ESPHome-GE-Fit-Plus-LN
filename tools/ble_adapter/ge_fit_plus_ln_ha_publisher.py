@@ -125,6 +125,20 @@ class HomeAssistantPublisher:
             attrs["state_class"] = "measurement"
             self.publish(entity_id, value, attrs)
 
+        fat_free_mass_kg = metrics.get("fat_free_mass_kg")
+        if fat_free_mass_kg is not None:
+            self.publish(
+                "sensor.ge_fit_plus_ln_fat_free_mass_lb",
+                round(float(fat_free_mass_kg) * 2.20462262185, 3),
+                {
+                    **common,
+                    "friendly_name": "GE Fit Plus LN Fat Free Mass (lb)",
+                    "unit_of_measurement": "lb",
+                    "device_class": "weight",
+                    "state_class": "measurement",
+                },
+            )
+
         impedance = metrics.get("impedance_ohm") or []
         for index, value in enumerate(impedance, start=1):
             self.publish(
