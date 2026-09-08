@@ -36,7 +36,7 @@ from ge_fit_plus_ln_probe import (  # noqa: E402
 
 LOGGER = logging.getLogger("ge_fit_plus_ln_ha_publisher")
 MIN_WEIGHT_KG = 5.0
-MAX_CAPTURE_SECONDS = 60.0
+MAX_CAPTURE_SECONDS = 300.0
 STABLE_SECONDS = 18.0
 COMPUTING_TIMEOUT_SECONDS = 45.0
 WEIGHT_STABLE_DELTA_KG = 0.1
@@ -198,6 +198,8 @@ async def capture_once(
     last_live_change: float | None = None
     computing_started: float | None = None
     result_seen = False
+    notification_count = 0
+    publish_task: asyncio.Task[None] | None = None
     published = False
     measured_at = utc_now().isoformat()
 
@@ -205,13 +207,18 @@ async def capture_once(
         nonlocal published
         if published:
             return
+        try:
+            measurement_id = f"{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S.%fZ')}-{uuid.uuid4().hex[:8]}"
+            await asyncio.to_thread(publisher.publish_measurement, metrics, measurement_id, measured_at)
+        except Exception:
+            LOGGER.exception("failed to publish measurement to Home Assistant")
+            raise
         published = True
-        measurement_id = f"{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S.%fZ')}-{uuid.uuid4().hex[:8]}"
-        await asyncio.to_thread(publisher.publish_measurement, metrics, measurement_id, measured_at)
         LOGGER.info("published measurement %s (%.3f kg, source=%s)", measurement_id, metrics["weight_kg"], metrics["source"])
 
     def on_notification(_: Any, data: bytearray) -> None:
-        nonlocal last_live_weight, last_live_change, computing_started, result_seen
+        nonlocal last_live_weight, last_live_change, computing_started, result_seen, notification_count, publish_task
+        notification_count += 1
         decoded = decode_frame(bytes(data), profile)
         if decoded is None:
             return
@@ -227,8 +234,8 @@ async def capture_once(
         elif kind == "result":
             result_seen = True
             metrics = decoded.get("metrics")
-            if isinstance(metrics, dict):
-                asyncio.create_task(publish_metrics(metrics))
+            if isinstance(metrics, dict) and publish_task is None:
+                publish_task = asyncio.create_task(publish_metrics(metrics))
 
     try:
         await client.connect()
@@ -246,6 +253,15 @@ async def capture_once(
                 computing_for is None or computing_for >= COMPUTING_TIMEOUT_SECONDS
             ):
                 await publish_metrics(compute_weight_only_metrics(last_live_weight, profile))
+        if publish_task is not None:
+            await publish_task
+        LOGGER.info(
+            "capture complete (notifications=%d, live_weight=%s, result=%s, published=%s)",
+            notification_count,
+            last_live_weight,
+            result_seen,
+            published,
+        )
         return published
     finally:
         if client.is_connected:

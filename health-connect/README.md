@@ -44,7 +44,7 @@ The official Jetpack client is `androidx.health.connect:connect-client`; the exa
 ## Local configuration
 
 The repository now contains a minimal Android bridge under `android/`. The debug APK
-was built and installed on the Xperia through its paired wireless ADB connection. It
+was built and installed on an Android companion device through its paired wireless ADB connection. It
 currently writes the scale's `WeightRecord`; body-fat and glucose records remain
 separate follow-up scopes.
 
