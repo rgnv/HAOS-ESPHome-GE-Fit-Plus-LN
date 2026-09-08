@@ -13,6 +13,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.health.connect.client.PermissionController
 import androidx.health.connect.client.permission.HealthPermission
 import androidx.health.connect.client.records.WeightRecord
+import androidx.health.connect.client.records.BloodGlucoseRecord
 import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.NetworkType
@@ -49,7 +50,7 @@ class MainActivity : AppCompatActivity() {
             textSize = 22f
         }, matchWrap())
         content.addView(TextView(this).apply {
-            text = "This Android bridge polls Home Assistant for each new measurement and writes a WeightRecord to Health Connect. The HA token stays in encrypted app-private storage."
+            text = "This Android bridge polls Home Assistant for new scale and Gluroo glucose measurements and writes them to Health Connect. The HA token stays in encrypted app-private storage."
             setPadding(0, dp(12), 0, dp(12))
         }, matchWrap())
         urlInput = EditText(this).apply {
@@ -108,7 +109,9 @@ class MainActivity : AppCompatActivity() {
         }
         permissionLauncher.launch(setOf(
             HealthPermission.getWritePermission(WeightRecord::class),
-            HealthPermission.getReadPermission(WeightRecord::class)
+            HealthPermission.getReadPermission(WeightRecord::class),
+            HealthPermission.getWritePermission(BloodGlucoseRecord::class),
+            HealthPermission.getReadPermission(BloodGlucoseRecord::class)
         ))
     }
 

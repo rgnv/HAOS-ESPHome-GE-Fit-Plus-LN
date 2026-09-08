@@ -7,10 +7,11 @@ Health Connect is an on-device Android data store. Home Assistant cannot write t
 The first bridge iteration writes only:
 
 - `WeightRecord` from `sensor.ge_fit_plus_ln_weight`
+- `BloodGlucoseRecord` from `sensor.gluroo_blood_glucose`
 
-The bridge keeps body fat, BMI, raw impedance, and the remaining metrics in Home
-Assistant initially. Body-fat records require a separate validation pass before
-enabling them.
+The bridge keeps body fat, BMI, raw impedance, and the remaining scale metrics in
+Home Assistant initially. Body-fat records require a separate validation pass before
+enabling them. Gluroo CGM values are written as interstitial-fluid glucose records.
 
 ## Sync design
 
@@ -29,12 +30,14 @@ The Android app should request only the permissions needed for the initial scope
 ```xml
 <uses-permission android:name="android.permission.health.WRITE_WEIGHT" />
 <uses-permission android:name="android.permission.health.READ_WEIGHT" />
+<uses-permission android:name="android.permission.health.WRITE_BLOOD_GLUCOSE" />
+<uses-permission android:name="android.permission.health.READ_BLOOD_GLUCOSE" />
 ```
 
-The bridge requests `WRITE_WEIGHT` and `READ_WEIGHT`. It uses the read permission for
-post-write verification and measurement deduplication. Any future body-fat or other
-record types will require separately requested permissions through the Health Connect
-UI.
+The bridge requests `WRITE_WEIGHT`, `READ_WEIGHT`, `WRITE_BLOOD_GLUCOSE`, and
+`READ_BLOOD_GLUCOSE`. It uses the read permissions for post-write verification and
+measurement deduplication. Any future body-fat or other record types will require
+separately requested permissions through the Health Connect UI.
 
 The official Jetpack client is `androidx.health.connect:connect-client`; the exact version will be pinned when the Android module is built. Health Connect requires Android 9/API 28 or newer with Google Play services. Android 14 includes Health Connect in the system; older supported Android releases use the Health Connect app.
 

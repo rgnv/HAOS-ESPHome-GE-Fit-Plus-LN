@@ -11,6 +11,7 @@ object SyncConfig {
     private const val URL = "ha_url"
     private const val TOKEN = "ha_token"
     private const val LAST_MEASUREMENT = "last_measurement_id"
+    private const val LAST_GLUCOSE = "last_glucose_key"
 
     private fun prefs(context: Context): android.content.SharedPreferences {
         val key = MasterKey.Builder(context).setKeyScheme(MasterKey.KeyScheme.AES256_GCM).build()
@@ -31,6 +32,8 @@ object SyncConfig {
     fun hasConfig(context: Context) = getUrl(context).isNotEmpty() && getToken(context).isNotEmpty()
     fun getLastMeasurement(context: Context) = prefs(context).getString(LAST_MEASUREMENT, "") ?: ""
     fun setLastMeasurement(context: Context, value: String) = prefs(context).edit().putString(LAST_MEASUREMENT, value).apply()
+    fun getLastGlucose(context: Context) = prefs(context).getString(LAST_GLUCOSE, "") ?: ""
+    fun setLastGlucose(context: Context, value: String) = prefs(context).edit().putString(LAST_GLUCOSE, value).apply()
 
     /** Imports a one-shot config staged through a trusted ADB session, then deletes it. */
     fun importAdbConfig(context: Context): Boolean {
