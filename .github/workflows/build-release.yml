@@ -36,8 +36,9 @@ jobs:
       - name: Validate Linux adapter tool
         run: |
           python -m pip install -r tools/ble_adapter/requirements.txt
-          python -m py_compile tools/ble_adapter/ge_fit_plus_ln_probe.py
+          python -m py_compile tools/ble_adapter/ge_fit_plus_ln_probe.py tools/ble_adapter/ge_fit_plus_ln_ha_publisher.py
           python tools/ble_adapter/ge_fit_plus_ln_probe.py --help
+          python tools/ble_adapter/ge_fit_plus_ln_ha_publisher.py --help
           python -m unittest tools/ble_adapter/test_probe.py
 
       - name: Provide CI-only secrets
