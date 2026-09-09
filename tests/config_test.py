@@ -25,10 +25,14 @@ with tempfile.TemporaryDirectory(prefix="ge-scale-config-") as directory:
         assert "  deassert_rts_dtr: true\n" in source
         assert "  power_save_mode: none\n" in source
         assert "  post_connect_roaming: false\n" in source
-        assert source.count("  reboot_timeout: 5min\n") == 2
         if "discovery" in name:
+            assert "  enable_on_boot: false\n" not in source
+            assert source.count("  reboot_timeout: 5min\n") == 2
             assert "ge_scale:" not in source and "actions:" not in source
         else:
+            assert "  enable_on_boot: false\n" in source
+            assert "    continuous: true\n" in source
+            assert source.count("  reboot_timeout: 0s\n") == 2
             assert "  batch_delay: 0ms\n" in source
         config = target / name
         config.write_text(source)

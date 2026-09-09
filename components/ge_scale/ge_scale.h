@@ -17,6 +17,9 @@
 #ifdef USE_TIME
 #include "esphome/components/time/real_time_clock.h"
 #endif
+#ifdef USE_WIFI
+#include "esphome/components/wifi/wifi_component.h"
+#endif
 
 #ifdef USE_ESP32
 
@@ -111,11 +114,21 @@ class GEScale : public Component, public ble_client::BLEClientNode {
   RecordingQueue recordings_;
   nvs_handle_t recording_nvs_{0};
   bool recording_ok_{false};
+#ifdef USE_WIFI
+  bool wifi_delivery_requested_{false};
+  uint32_t wifi_request_started_ms_{0};
+  uint32_t wifi_retry_after_ms_{0};
+  uint32_t wifi_idle_deadline_ms_{0};
+#endif
   uint32_t replay_ms_{0}, pending_call_{0}, fallback_measurement_id_{0};
   std::array<float, 8> session_impedances_{};
   bool save_recordings_(const std::vector<uint8_t> &bytes);
   void record_(Recording &record);
   void replay_();
+#ifdef USE_WIFI
+  void request_wifi_();
+  void maybe_disable_wifi_();
+#endif
 
   // BLE plumbing
   uint16_t notify_handle_{0};  // fff1 (notify)

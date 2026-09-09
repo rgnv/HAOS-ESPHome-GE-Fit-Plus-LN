@@ -8,6 +8,54 @@
 
 namespace esphome::ge_scale {
 static const char *const TAG = "ge_scale.recording";
+static constexpr uint32_t WIFI_CONNECT_TIMEOUT_MS = 90000;
+static constexpr uint32_t WIFI_RETRY_DELAY_MS = 60000;
+static constexpr uint32_t WIFI_IDLE_GRACE_MS = 5000;
+
+#ifdef USE_WIFI
+void GEScale::request_wifi_() {
+  auto *wifi = wifi::global_wifi_component;
+  if (wifi == nullptr) return;
+  const uint32_t now = millis();
+  if (wifi->is_disabled() && static_cast<int32_t>(now - this->wifi_retry_after_ms_) < 0)
+    return;
+  if (wifi->is_disabled()) {
+    ESP_LOGI(TAG, "Enabling WiFi for queued measurement delivery");
+    wifi->enable();
+  }
+  this->wifi_delivery_requested_ = true;
+  this->wifi_idle_deadline_ms_ = 0;
+  if (!this->wifi_request_started_ms_)
+    this->wifi_request_started_ms_ = now;
+}
+
+void GEScale::maybe_disable_wifi_() {
+  auto *wifi = wifi::global_wifi_component;
+  if (wifi == nullptr || !this->wifi_delivery_requested_) return;
+  const uint32_t now = millis();
+  auto *server = api::global_api_server;
+  const bool api_ready = server != nullptr && server->is_connected_with_state_subscription();
+  if (!api_ready && this->wifi_request_started_ms_ && now - this->wifi_request_started_ms_ > WIFI_CONNECT_TIMEOUT_MS) {
+    ESP_LOGW(TAG, "WiFi/API delivery timeout; retaining queued recordings and returning to BLE-only");
+    wifi->disable();
+    this->wifi_delivery_requested_ = false;
+    this->wifi_request_started_ms_ = 0;
+    this->wifi_idle_deadline_ms_ = 0;
+    this->wifi_retry_after_ms_ = now + WIFI_RETRY_DELAY_MS;
+    this->status_set_warning("WiFi delivery timeout; recording retained");
+    return;
+  }
+  if (api_ready)
+    this->wifi_request_started_ms_ = 0;
+  if (this->pending_call_ || this->recordings_.count || !this->wifi_idle_deadline_ms_ ||
+      static_cast<int32_t>(now - this->wifi_idle_deadline_ms_) < 0)
+    return;
+  ESP_LOGI(TAG, "Queued delivery complete; disabling WiFi until the next recording");
+  wifi->disable();
+  this->wifi_delivery_requested_ = false;
+  this->wifi_idle_deadline_ms_ = 0;
+}
+#endif
 
 void GEScale::setup() {
   if (this->recordings_.capacity < 1 || this->recordings_.capacity > RecordingQueue::MAX_RECORDS) {
@@ -42,6 +90,10 @@ void GEScale::setup() {
   }
   if (!this->recording_ok_)
     this->status_set_warning("Recording storage invalid; retained for recovery");
+#ifdef USE_WIFI
+  if (this->recording_ok_ && this->recordings_.front())
+    this->request_wifi_();
+#endif
 }
 
 bool GEScale::save_recordings_(const std::vector<uint8_t> &bytes) {
@@ -73,6 +125,10 @@ void GEScale::record_(Recording &r) {
     if (!persisted) {
       this->status_set_warning("Recording not retained; storage full or failed");
       ESP_LOGE(TAG, "Finalized recording not persisted; HA is offline");
+    } else {
+#ifdef USE_WIFI
+      this->request_wifi_();
+#endif
     }
     return;
   }
@@ -97,6 +153,10 @@ void GEScale::record_(Recording &r) {
   if (this->measurement_id_sensor_ != nullptr)
     this->measurement_id_sensor_->publish_state(static_cast<float>(measurement));
 #endif
+#ifdef USE_WIFI
+  if (this->wifi_delivery_requested_ && this->recordings_.count == 0)
+    this->wifi_idle_deadline_ms_ = millis() + WIFI_IDLE_GRACE_MS;
+#endif
 }
 
 void GEScale::discard_recording(std::string token) {
@@ -109,14 +169,23 @@ void GEScale::replay_() {
   const uint32_t now = millis();
   auto *server = api::global_api_server;
   if (!this->recording_ok_ || this->pending_call_ || !this->recordings_.front()) return;
+  if (server == nullptr || !server->is_connected_with_state_subscription()) {
+#ifdef USE_WIFI
+    this->request_wifi_();
+#endif
+    return;
+  }
   const auto &r = *this->recordings_.front();
   if (!replayable(r)) {
     this->status_set_warning("Oldest recording needs recovery: guest or invalid timestamp");
     return;
   }
-  if (server == nullptr || !server->is_connected_with_state_subscription() || now - this->replay_ms_ < 60000)
+  if (this->replay_ms_ && now - this->replay_ms_ < 60000)
     return;
   this->replay_ms_ = now;
+#ifdef USE_WIFI
+  this->wifi_request_started_ms_ = 0;
+#endif
 
   // Status-only response: provider must raise on rejected HTTP writes. No claim
   // of Google-level idempotency; a lost response can cause a duplicate on retry.
@@ -167,10 +236,15 @@ void GEScale::replay_() {
     this->pending_call_ = 0;
     this->replay_ms_ = millis();
     if (this->recording_ok_ && this->recordings_.response(token, response.is_success(),
-        [this](const auto &b) { return this->save_recordings_(b); }))
+        [this](const auto &b) { return this->save_recordings_(b); })) {
+#ifdef USE_WIFI
+      if (this->recordings_.count == 0)
+        this->wifi_idle_deadline_ms_ = millis() + WIFI_IDLE_GRACE_MS;
+#endif
       this->status_clear_warning();
-    else
+    } else {
       this->status_set_warning("Replay failed; oldest recording retained");
+    }
   });
   // APIServer has no unregister API. Deliver a local failure through its public
   // handler to remove the callback, bounding memory to one outstanding response.

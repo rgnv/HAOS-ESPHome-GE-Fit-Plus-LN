@@ -226,6 +226,9 @@ void GEScale::handle_frame_(const uint8_t *b, uint16_t len) {
 
 void GEScale::loop() {
   this->replay_();
+#ifdef USE_WIFI
+  this->maybe_disable_wifi_();
+#endif
   if (this->node_state != espbt::ClientState::ESTABLISHED)
     return;
   if (!this->had_live_ || this->got_result_ || this->weightonly_published_ ||

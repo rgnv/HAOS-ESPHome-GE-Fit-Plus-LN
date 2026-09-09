@@ -6,7 +6,7 @@ import esphome.config_validation as cv
 from esphome.const import CONF_DISABLED_BY_DEFAULT, CONF_ID, CONF_TIME_ID
 
 CODEOWNERS = ["@rgnv"]
-DEPENDENCIES = ["ble_client", "api"]
+DEPENDENCIES = ["ble_client", "api", "wifi"]
 AUTO_LOAD = ["sensor", "text_sensor", "binary_sensor"]
 
 ge_scale_ns = cg.esphome_ns.namespace("ge_scale")

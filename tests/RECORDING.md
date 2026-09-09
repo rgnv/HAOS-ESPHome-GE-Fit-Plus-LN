@@ -13,6 +13,16 @@ new live measurement ID, including during replay. Each record stores capture UTC
 (or zero when unsynchronized), uptime, source/subject flags, and nullable metrics.
 Values are frozen at first finalization, never rebuilt from current sensor state.
 
+## Radio lifecycle
+
+Production starts with Wi-Fi disabled and the BLE tracker scanning continuously.
+A finalized record is written to NVS before Wi-Fi is enabled. On boot, a pending
+record also enables Wi-Fi for delivery. After successful live delivery or after
+all replay records are acknowledged, the device waits five seconds for queued API
+messages and disables Wi-Fi again. A failed connection attempt retains records,
+disables Wi-Fi after 90 seconds, and retries after a 60-second backoff. Discovery
+keeps Wi-Fi enabled so provisioning remains accessible.
+
 ## Provider setup and replay
 
 No extra provider entry-ID configuration is required. The production ESPHome
