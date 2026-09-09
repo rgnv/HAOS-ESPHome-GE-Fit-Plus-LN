@@ -17,6 +17,7 @@ esp32:
 
 logger:
   level: VERY_VERBOSE
+  deassert_rts_dtr: true
 
 api:
   encryption:

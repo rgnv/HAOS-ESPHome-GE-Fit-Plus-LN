@@ -17,6 +17,7 @@ esp32:
 
 logger:
   level: DEBUG
+  deassert_rts_dtr: true
 
 api:
   encryption:
