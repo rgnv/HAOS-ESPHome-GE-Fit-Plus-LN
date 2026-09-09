@@ -1,33 +1,59 @@
 type: vertical-stack
 cards:
   - type: entities
-    title: GE Fit Plus LN
+    title: GE Fit Plus LN — last recorded metrics
     show_header_toggle: false
     entities:
-      - entity: sensor.ge_fit_plus_ln_weight
+      - entity: sensor.ge_fit_plus_ln_last_weight
         name: Weight
-      - entity: sensor.ge_fit_plus_ln_weight_lb
+      - entity: sensor.ge_fit_plus_ln_last_weight_lb
         name: Weight (lb)
-      - entity: sensor.ge_fit_plus_ln_bmi
+      - entity: sensor.ge_fit_plus_ln_last_bmi
         name: BMI
-      - entity: sensor.ge_fit_plus_ln_body_fat
+      - entity: sensor.ge_fit_plus_ln_last_body_fat
         name: Body fat
-      - entity: sensor.ge_fit_plus_ln_body_water
+      - entity: sensor.ge_fit_plus_ln_last_body_water
         name: Body water
-      - entity: sensor.ge_fit_plus_ln_muscle_mass
-        name: Muscle mass
-      - entity: sensor.ge_fit_plus_ln_bone_mass
+      - entity: sensor.ge_fit_plus_ln_last_protein
+        name: Protein
+      - entity: sensor.ge_fit_plus_ln_last_bone_mass
         name: Bone mass
-      - entity: sensor.ge_fit_plus_ln_fat_free_mass
+      - entity: sensor.ge_fit_plus_ln_last_muscle_mass
+        name: Muscle mass
+      - entity: sensor.ge_fit_plus_ln_last_skeletal_muscle
+        name: Skeletal muscle
+      - entity: sensor.ge_fit_plus_ln_last_fat_free_mass
         name: Fat-free mass
-      - entity: sensor.ge_fit_plus_ln_whole_body_impedance
+      - entity: sensor.ge_fit_plus_ln_last_whole_body_impedance
         name: Whole-body impedance
-      - entity: sensor.ge_fit_plus_ln_measurement_id
+      - entity: sensor.ge_fit_plus_ln_last_impedance_1
+        name: Impedance 1
+      - entity: sensor.ge_fit_plus_ln_last_impedance_2
+        name: Impedance 2
+      - entity: sensor.ge_fit_plus_ln_last_impedance_3
+        name: Impedance 3
+      - entity: sensor.ge_fit_plus_ln_last_impedance_4
+        name: Impedance 4
+      - entity: sensor.ge_fit_plus_ln_last_impedance_5
+        name: Impedance 5
+      - entity: sensor.ge_fit_plus_ln_last_impedance_6
+        name: Impedance 6
+      - entity: sensor.ge_fit_plus_ln_last_impedance_7
+        name: Impedance 7
+      - entity: sensor.ge_fit_plus_ln_last_impedance_8
+        name: Impedance 8
+      - entity: sensor.ge_fit_plus_ln_last_measurement_source
+        name: Source
+      - entity: sensor.ge_fit_plus_ln_last_measurement_subject
+        name: Subject
+      - entity: sensor.ge_fit_plus_ln_last_measurement_id
         name: Measurement ID
+      - entity: sensor.ge_fit_plus_ln_last_recorded_at
+        name: Recorded at
   - type: history-graph
     title: GE Fit Plus LN history
     hours_to_show: 168
     entities:
-      - sensor.ge_fit_plus_ln_weight
-      - sensor.ge_fit_plus_ln_body_fat
-      - sensor.ge_fit_plus_ln_bmi
+      - sensor.ge_fit_plus_ln_last_weight
+      - sensor.ge_fit_plus_ln_last_body_fat
+      - sensor.ge_fit_plus_ln_last_bmi

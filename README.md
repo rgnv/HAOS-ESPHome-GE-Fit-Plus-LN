@@ -154,9 +154,10 @@ A tagged GitHub release contains CI-built validation binaries and checksums. Tho
 ESPHome native API discovery creates the device and sensor entities automatically when the C6 joins Home Assistant. The optional HAOS assets are:
 
 - `homeassistant/ge_fit_plus_ln_package.yaml` — logbook entry on every measurement ID change, including repeated weights.
-- `homeassistant/ge_fit_plus_ln_card.yaml` — dashboard card for the primary and diagnostic metrics.
+- `homeassistant/ge_fit_plus_ln_last_metrics.yaml` — persistent last-metric mirrors and the local-time 9 PM no-weigh-in reminder.
+- `homeassistant/ge_fit_plus_ln_card.yaml` — dashboard card for the persistent primary and diagnostic metrics.
 
-To use them, include the package from the HA configuration and paste the card YAML into a dashboard. Home Assistant Recorder normally records enabled ESPHome sensors automatically; the measurement-ID logbook automation preserves a distinct event for every weigh-in.
+To use them, include the packages from the HA configuration and paste the card YAML into a dashboard. The last-metrics package keeps the latest finalized values available when the C6 intentionally turns Wi-Fi off; impedance fields remain unknown when the scale did not provide BIA. Home Assistant Recorder normally records enabled ESPHome sensors automatically; the measurement-ID logbook automation preserves a distinct event for every weigh-in.
 
 The public and CI configurations keep `write_back` disabled. A private deployment may set `ge_scale_write_back: true` in its ignored local `secrets.yaml`.
 

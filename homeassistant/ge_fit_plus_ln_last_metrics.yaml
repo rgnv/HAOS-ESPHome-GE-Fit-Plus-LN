@@ -1,0 +1,326 @@
+# Persistent last-measurement mirrors for the GE Fit Plus LN.
+# The ESPHome entities can go unavailable when the C6 turns Wi-Fi off; these
+# helpers retain the last finalized values for the dashboard and reminder.
+
+input_text:
+  ge_fit_plus_ln_last_weight_kg:
+    name: GE Fit Plus LN Last Weight (kg)
+    max: 32
+  ge_fit_plus_ln_last_weight_lb:
+    name: GE Fit Plus LN Last Weight (lb)
+    max: 32
+  ge_fit_plus_ln_last_bmi:
+    name: GE Fit Plus LN Last BMI
+    max: 32
+  ge_fit_plus_ln_last_body_fat:
+    name: GE Fit Plus LN Last Body Fat
+    max: 32
+  ge_fit_plus_ln_last_body_water:
+    name: GE Fit Plus LN Last Body Water
+    max: 32
+  ge_fit_plus_ln_last_protein:
+    name: GE Fit Plus LN Last Protein
+    max: 32
+  ge_fit_plus_ln_last_bone_mass:
+    name: GE Fit Plus LN Last Bone Mass
+    max: 32
+  ge_fit_plus_ln_last_muscle_mass:
+    name: GE Fit Plus LN Last Muscle Mass
+    max: 32
+  ge_fit_plus_ln_last_skeletal_muscle:
+    name: GE Fit Plus LN Last Skeletal Muscle
+    max: 32
+  ge_fit_plus_ln_last_fat_free_mass:
+    name: GE Fit Plus LN Last Fat Free Mass
+    max: 32
+  ge_fit_plus_ln_last_whole_body_impedance:
+    name: GE Fit Plus LN Last Whole Body Impedance
+    max: 32
+  ge_fit_plus_ln_last_impedance_1:
+    name: GE Fit Plus LN Last Impedance 1
+    max: 32
+  ge_fit_plus_ln_last_impedance_2:
+    name: GE Fit Plus LN Last Impedance 2
+    max: 32
+  ge_fit_plus_ln_last_impedance_3:
+    name: GE Fit Plus LN Last Impedance 3
+    max: 32
+  ge_fit_plus_ln_last_impedance_4:
+    name: GE Fit Plus LN Last Impedance 4
+    max: 32
+  ge_fit_plus_ln_last_impedance_5:
+    name: GE Fit Plus LN Last Impedance 5
+    max: 32
+  ge_fit_plus_ln_last_impedance_6:
+    name: GE Fit Plus LN Last Impedance 6
+    max: 32
+  ge_fit_plus_ln_last_impedance_7:
+    name: GE Fit Plus LN Last Impedance 7
+    max: 32
+  ge_fit_plus_ln_last_impedance_8:
+    name: GE Fit Plus LN Last Impedance 8
+    max: 32
+  ge_fit_plus_ln_last_source:
+    name: GE Fit Plus LN Last Measurement Source
+    max: 32
+  ge_fit_plus_ln_last_subject:
+    name: GE Fit Plus LN Last Measurement Subject
+    max: 32
+  ge_fit_plus_ln_last_measurement_id:
+    name: GE Fit Plus LN Last Measurement ID
+    max: 64
+  ge_fit_plus_ln_last_recorded_at:
+    name: GE Fit Plus LN Last Recorded At
+    max: 64
+
+template:
+  - sensor:
+      - name: GE Fit Plus LN Last Weight
+        unique_id: ge_fit_plus_ln_last_weight
+        state: "{{ states('input_text.ge_fit_plus_ln_last_weight_kg') }}"
+        availability: "{{ is_number(states('input_text.ge_fit_plus_ln_last_weight_kg')) }}"
+        unit_of_measurement: kg
+        device_class: weight
+        state_class: measurement
+      - name: GE Fit Plus LN Last Weight (lb)
+        unique_id: ge_fit_plus_ln_last_weight_lb
+        state: "{{ states('input_text.ge_fit_plus_ln_last_weight_lb') }}"
+        availability: "{{ is_number(states('input_text.ge_fit_plus_ln_last_weight_lb')) }}"
+        unit_of_measurement: lb
+        device_class: weight
+        state_class: measurement
+      - name: GE Fit Plus LN Last BMI
+        unique_id: ge_fit_plus_ln_last_bmi
+        state: "{{ states('input_text.ge_fit_plus_ln_last_bmi') }}"
+        availability: "{{ is_number(states('input_text.ge_fit_plus_ln_last_bmi')) }}"
+        state_class: measurement
+      - name: GE Fit Plus LN Last Body Fat
+        unique_id: ge_fit_plus_ln_last_body_fat
+        state: "{{ states('input_text.ge_fit_plus_ln_last_body_fat') }}"
+        availability: "{{ is_number(states('input_text.ge_fit_plus_ln_last_body_fat')) }}"
+        unit_of_measurement: "%"
+        state_class: measurement
+      - name: GE Fit Plus LN Last Body Water
+        unique_id: ge_fit_plus_ln_last_body_water
+        state: "{{ states('input_text.ge_fit_plus_ln_last_body_water') }}"
+        availability: "{{ is_number(states('input_text.ge_fit_plus_ln_last_body_water')) }}"
+        unit_of_measurement: "%"
+        state_class: measurement
+      - name: GE Fit Plus LN Last Protein
+        unique_id: ge_fit_plus_ln_last_protein
+        state: "{{ states('input_text.ge_fit_plus_ln_last_protein') }}"
+        availability: "{{ is_number(states('input_text.ge_fit_plus_ln_last_protein')) }}"
+        unit_of_measurement: "%"
+        state_class: measurement
+      - name: GE Fit Plus LN Last Bone Mass
+        unique_id: ge_fit_plus_ln_last_bone_mass
+        state: "{{ states('input_text.ge_fit_plus_ln_last_bone_mass') }}"
+        availability: "{{ is_number(states('input_text.ge_fit_plus_ln_last_bone_mass')) }}"
+        unit_of_measurement: "%"
+        state_class: measurement
+      - name: GE Fit Plus LN Last Muscle Mass
+        unique_id: ge_fit_plus_ln_last_muscle_mass
+        state: "{{ states('input_text.ge_fit_plus_ln_last_muscle_mass') }}"
+        availability: "{{ is_number(states('input_text.ge_fit_plus_ln_last_muscle_mass')) }}"
+        unit_of_measurement: "%"
+        state_class: measurement
+      - name: GE Fit Plus LN Last Skeletal Muscle
+        unique_id: ge_fit_plus_ln_last_skeletal_muscle
+        state: "{{ states('input_text.ge_fit_plus_ln_last_skeletal_muscle') }}"
+        availability: "{{ is_number(states('input_text.ge_fit_plus_ln_last_skeletal_muscle')) }}"
+        unit_of_measurement: "%"
+        state_class: measurement
+      - name: GE Fit Plus LN Last Fat Free Mass
+        unique_id: ge_fit_plus_ln_last_fat_free_mass
+        state: "{{ states('input_text.ge_fit_plus_ln_last_fat_free_mass') }}"
+        availability: "{{ is_number(states('input_text.ge_fit_plus_ln_last_fat_free_mass')) }}"
+        unit_of_measurement: kg
+        device_class: weight
+        state_class: measurement
+      - name: GE Fit Plus LN Last Whole Body Impedance
+        unique_id: ge_fit_plus_ln_last_whole_body_impedance
+        state: "{{ states('input_text.ge_fit_plus_ln_last_whole_body_impedance') }}"
+        availability: "{{ is_number(states('input_text.ge_fit_plus_ln_last_whole_body_impedance')) }}"
+        unit_of_measurement: "Ω"
+        state_class: measurement
+      - name: GE Fit Plus LN Last Impedance 1
+        unique_id: ge_fit_plus_ln_last_impedance_1
+        state: "{{ states('input_text.ge_fit_plus_ln_last_impedance_1') }}"
+        availability: "{{ is_number(states('input_text.ge_fit_plus_ln_last_impedance_1')) }}"
+        unit_of_measurement: "Ω"
+        state_class: measurement
+      - name: GE Fit Plus LN Last Impedance 2
+        unique_id: ge_fit_plus_ln_last_impedance_2
+        state: "{{ states('input_text.ge_fit_plus_ln_last_impedance_2') }}"
+        availability: "{{ is_number(states('input_text.ge_fit_plus_ln_last_impedance_2')) }}"
+        unit_of_measurement: "Ω"
+        state_class: measurement
+      - name: GE Fit Plus LN Last Impedance 3
+        unique_id: ge_fit_plus_ln_last_impedance_3
+        state: "{{ states('input_text.ge_fit_plus_ln_last_impedance_3') }}"
+        availability: "{{ is_number(states('input_text.ge_fit_plus_ln_last_impedance_3')) }}"
+        unit_of_measurement: "Ω"
+        state_class: measurement
+      - name: GE Fit Plus LN Last Impedance 4
+        unique_id: ge_fit_plus_ln_last_impedance_4
+        state: "{{ states('input_text.ge_fit_plus_ln_last_impedance_4') }}"
+        availability: "{{ is_number(states('input_text.ge_fit_plus_ln_last_impedance_4')) }}"
+        unit_of_measurement: "Ω"
+        state_class: measurement
+      - name: GE Fit Plus LN Last Impedance 5
+        unique_id: ge_fit_plus_ln_last_impedance_5
+        state: "{{ states('input_text.ge_fit_plus_ln_last_impedance_5') }}"
+        availability: "{{ is_number(states('input_text.ge_fit_plus_ln_last_impedance_5')) }}"
+        unit_of_measurement: "Ω"
+        state_class: measurement
+      - name: GE Fit Plus LN Last Impedance 6
+        unique_id: ge_fit_plus_ln_last_impedance_6
+        state: "{{ states('input_text.ge_fit_plus_ln_last_impedance_6') }}"
+        availability: "{{ is_number(states('input_text.ge_fit_plus_ln_last_impedance_6')) }}"
+        unit_of_measurement: "Ω"
+        state_class: measurement
+      - name: GE Fit Plus LN Last Impedance 7
+        unique_id: ge_fit_plus_ln_last_impedance_7
+        state: "{{ states('input_text.ge_fit_plus_ln_last_impedance_7') }}"
+        availability: "{{ is_number(states('input_text.ge_fit_plus_ln_last_impedance_7')) }}"
+        unit_of_measurement: "Ω"
+        state_class: measurement
+      - name: GE Fit Plus LN Last Impedance 8
+        unique_id: ge_fit_plus_ln_last_impedance_8
+        state: "{{ states('input_text.ge_fit_plus_ln_last_impedance_8') }}"
+        availability: "{{ is_number(states('input_text.ge_fit_plus_ln_last_impedance_8')) }}"
+        unit_of_measurement: "Ω"
+        state_class: measurement
+      - name: GE Fit Plus LN Last Recorded At
+        unique_id: ge_fit_plus_ln_last_recorded_at
+        state: "{{ states('input_text.ge_fit_plus_ln_last_recorded_at') }}"
+        availability: >-
+          {{ states('input_text.ge_fit_plus_ln_last_recorded_at') not in ['', 'unknown', 'unavailable'] }}
+        device_class: timestamp
+  - sensor:
+      - name: GE Fit Plus LN Last Measurement Source
+        unique_id: ge_fit_plus_ln_last_source
+        state: "{{ states('input_text.ge_fit_plus_ln_last_source') }}"
+        availability: "{{ states('input_text.ge_fit_plus_ln_last_source') not in ['', 'unknown', 'unavailable'] }}"
+      - name: GE Fit Plus LN Last Measurement Subject
+        unique_id: ge_fit_plus_ln_last_subject
+        state: "{{ states('input_text.ge_fit_plus_ln_last_subject') }}"
+        availability: "{{ states('input_text.ge_fit_plus_ln_last_subject') not in ['', 'unknown', 'unavailable'] }}"
+      - name: GE Fit Plus LN Last Measurement ID
+        unique_id: ge_fit_plus_ln_last_measurement_id
+        state: "{{ states('input_text.ge_fit_plus_ln_last_measurement_id') }}"
+        availability: "{{ states('input_text.ge_fit_plus_ln_last_measurement_id') not in ['', 'unknown', 'unavailable'] }}"
+
+automation:
+  - id: ge_fit_plus_ln_snapshot_last_metrics
+    alias: GE Fit Plus LN - remember last recorded metrics
+    description: Persist the latest finalized scale metrics while the C6 may be offline.
+    mode: queued
+    trigger:
+      - platform: state
+        entity_id: sensor.ge_fit_plus_ln_weight
+        for: "00:00:05"
+      - platform: state
+        entity_id: sensor.ge_fit_plus_ln_measurement_id
+    condition:
+      - condition: template
+        value_template: >-
+          {{ trigger.to_state is not none and is_number(trigger.to_state.state) }}
+    action:
+      - repeat:
+          for_each:
+            - helper: input_text.ge_fit_plus_ln_last_weight_kg
+              source: sensor.ge_fit_plus_ln_weight
+            - helper: input_text.ge_fit_plus_ln_last_weight_lb
+              source: sensor.ge_fit_plus_ln_weight_lb
+            - helper: input_text.ge_fit_plus_ln_last_bmi
+              source: sensor.ge_fit_plus_ln_bmi
+            - helper: input_text.ge_fit_plus_ln_last_body_fat
+              source: sensor.ge_fit_plus_ln_body_fat
+            - helper: input_text.ge_fit_plus_ln_last_body_water
+              source: sensor.ge_fit_plus_ln_body_water
+            - helper: input_text.ge_fit_plus_ln_last_protein
+              source: sensor.ge_fit_plus_ln_protein
+            - helper: input_text.ge_fit_plus_ln_last_bone_mass
+              source: sensor.ge_fit_plus_ln_bone_mass
+            - helper: input_text.ge_fit_plus_ln_last_muscle_mass
+              source: sensor.ge_fit_plus_ln_muscle_mass
+            - helper: input_text.ge_fit_plus_ln_last_skeletal_muscle
+              source: sensor.ge_fit_plus_ln_skeletal_muscle
+            - helper: input_text.ge_fit_plus_ln_last_fat_free_mass
+              source: sensor.ge_fit_plus_ln_fat_free_mass
+            - helper: input_text.ge_fit_plus_ln_last_whole_body_impedance
+              source: sensor.ge_fit_plus_ln_whole_body_impedance
+            - helper: input_text.ge_fit_plus_ln_last_impedance_1
+              source: sensor.ge_fit_plus_ln_impedance_1
+            - helper: input_text.ge_fit_plus_ln_last_impedance_2
+              source: sensor.ge_fit_plus_ln_impedance_2
+            - helper: input_text.ge_fit_plus_ln_last_impedance_3
+              source: sensor.ge_fit_plus_ln_impedance_3
+            - helper: input_text.ge_fit_plus_ln_last_impedance_4
+              source: sensor.ge_fit_plus_ln_impedance_4
+            - helper: input_text.ge_fit_plus_ln_last_impedance_5
+              source: sensor.ge_fit_plus_ln_impedance_5
+            - helper: input_text.ge_fit_plus_ln_last_impedance_6
+              source: sensor.ge_fit_plus_ln_impedance_6
+            - helper: input_text.ge_fit_plus_ln_last_impedance_7
+              source: sensor.ge_fit_plus_ln_impedance_7
+            - helper: input_text.ge_fit_plus_ln_last_impedance_8
+              source: sensor.ge_fit_plus_ln_impedance_8
+          sequence:
+            - service: input_text.set_value
+              target:
+                entity_id: "{{ repeat.item.helper }}"
+              data:
+                value: "{{ states(repeat.item.source) }}"
+      - service: input_text.set_value
+        target:
+          entity_id: input_text.ge_fit_plus_ln_last_source
+        data:
+          value: "{{ states('sensor.ge_fit_plus_ln_measurement_source') }}"
+      - service: input_text.set_value
+        target:
+          entity_id: input_text.ge_fit_plus_ln_last_subject
+        data:
+          value: "{{ states('sensor.ge_fit_plus_ln_subject') }}"
+      - service: input_text.set_value
+        target:
+          entity_id: input_text.ge_fit_plus_ln_last_measurement_id
+        data:
+          value: "{{ states('sensor.ge_fit_plus_ln_measurement_id') }}"
+      - service: input_text.set_value
+        target:
+          entity_id: input_text.ge_fit_plus_ln_last_recorded_at
+        data:
+          value: "{{ now().isoformat() }}"
+      - service: persistent_notification.dismiss
+        data:
+          notification_id: ge_fit_plus_ln_daily_reminder
+
+  - id: ge_fit_plus_ln_daily_weigh_in_reminder
+    alias: GE Fit Plus LN - 9 PM weigh-in reminder
+    description: Remind at 9 PM local time when no finalized weigh-in was recorded today.
+    mode: single
+    trigger:
+      - platform: time
+        at: "21:00:00"
+    condition:
+      - condition: template
+        value_template: >-
+          {% set recorded = states('input_text.ge_fit_plus_ln_last_recorded_at') %}
+          {% set recorded_at = as_datetime(recorded, default=none) %}
+          {{ recorded_at is none or as_local(recorded_at).date() != now().date() }}
+    action:
+      - service: persistent_notification.create
+        data:
+          notification_id: ge_fit_plus_ln_daily_reminder
+          title: GE Fit Plus LN reminder
+          message: You have not recorded a weigh-in today.
+      - service: notify.mobile_app_red
+        data:
+          title: GE Fit Plus LN reminder
+          message: You have not recorded a weigh-in today.
+      - service: notify.mobile_app_pixel_watch_5
+        data:
+          title: GE Fit Plus LN reminder
+          message: You have not recorded a weigh-in today.
