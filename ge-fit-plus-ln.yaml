@@ -63,6 +63,16 @@ external_components:
 esp32_ble_tracker:
   scan_parameters:
     continuous: true
+    # Match the known address from ADV_IND itself. IDF active scanning otherwise
+    # withholds it until SCAN_RSP, which a weak/intermittent peripheral may miss.
+    active: false
+  on_ble_advertise:
+    - mac_address: !secret ge_scale_mac
+      then:
+        - lambda: |-
+            ESP_LOGI("ge_scale", "Target advertisement: addr_type=%u rssi=%d client_state=%u",
+                     static_cast<unsigned>(x.get_address_type()), x.get_rssi(),
+                     static_cast<unsigned>(id(ge_scale_client).state()));
 
 ble_client:
   - mac_address: !secret ge_scale_mac

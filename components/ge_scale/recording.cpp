@@ -15,10 +15,13 @@ static constexpr uint32_t WIFI_IDLE_GRACE_MS = 5000;
 #ifdef USE_WIFI
 void GEScale::request_wifi_() {
   auto *wifi = wifi::global_wifi_component;
-  if (wifi == nullptr) return;
+  // BLEClient also calls node loops during setup, before WiFi's lower priority.
+  if (wifi == nullptr || !wifi->is_ready()) return;
   const uint32_t now = millis();
-  if (wifi->is_disabled() && static_cast<int32_t>(now - this->wifi_retry_after_ms_) < 0)
+  if (wifi->is_disabled() && this->wifi_retry_after_ms_ &&
+      static_cast<int32_t>(now - this->wifi_retry_after_ms_) < 0)
     return;
+  this->wifi_retry_after_ms_ = 0;
   if (wifi->is_disabled()) {
     ESP_LOGI(TAG, "Enabling WiFi for queued measurement delivery");
     wifi->enable();
@@ -90,10 +93,7 @@ void GEScale::setup() {
   }
   if (!this->recording_ok_)
     this->status_set_warning("Recording storage invalid; retained for recovery");
-#ifdef USE_WIFI
-  if (this->recording_ok_ && this->recordings_.front())
-    this->request_wifi_();
-#endif
+  // replay_() requests delivery once WiFi setup has finished.
 }
 
 bool GEScale::save_recordings_(const std::vector<uint8_t> &bytes) {

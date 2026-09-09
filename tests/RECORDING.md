@@ -15,7 +15,10 @@ Values are frozen at first finalization, never rebuilt from current sensor state
 
 ## Radio lifecycle
 
-Production starts with Wi-Fi disabled and the BLE tracker scanning continuously.
+Production starts with Wi-Fi disabled and the BLE tracker scanning continuously
+in passive mode. The exact target address matches its advertisement without
+waiting for a scan response; ESPHome keeps the advertised public/random address
+type for GATT open. Discovery firmware still uses active scanning for metadata.
 A finalized record is written to NVS before Wi-Fi is enabled. On boot, a pending
 record also enables Wi-Fi for delivery. After successful live delivery or after
 all replay records are acknowledged, the device waits five seconds for queued API
@@ -109,7 +112,7 @@ Run from repository root (Python environment needs pinned ESPHome 2026.8.2):
 ```sh
 g++ -std=c++17 -Wall -Wextra -Werror -I. tests/recording_test.cpp -o /tmp/recording-test
 /tmp/recording-test
-python tests/config_test.py
+python3 tests/config_test.py
 ```
 
 Host checks cover FIFO/full capacity, wrap, corruption/truncation, invalid schema,

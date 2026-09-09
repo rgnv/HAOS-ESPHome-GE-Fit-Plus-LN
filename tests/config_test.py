@@ -6,6 +6,21 @@ import sys
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
+
+# Source contracts only: no firmware/host compilation or local secrets required.
+recording = (ROOT / "components/ge_scale/recording.cpp").read_text()
+request = recording.split("void GEScale::request_wifi_() {", 1)[1].split(
+    "void GEScale::maybe_disable_wifi_()", 1)[0]
+assert request.index("!wifi->is_ready()") < request.index("wifi->enable()")
+assert "wifi->is_disabled() && this->wifi_retry_after_ms_ &&" in request
+assert request.index("this->wifi_retry_after_ms_ = 0;") < request.index("wifi->enable()")
+setup = recording.split("void GEScale::setup() {", 1)[1].split(
+    "bool GEScale::save_recordings_", 1)[0]
+assert "this->request_wifi_();" not in setup
+replay = recording.split("void GEScale::replay_() {", 1)[1]
+assert "this->request_wifi_();" in replay  # Restored outbox still wakes Wi-Fi.
+print("Wi-Fi setup/backoff source contracts passed (not C++ execution)")
+
 ESPHOME = shutil.which("esphome")
 if ESPHOME is None:
     for candidate in (Path(sys.executable).with_name("esphome"), Path("/var/lib/hermes/.venv-esphome/bin/esphome")):
@@ -30,8 +45,13 @@ with tempfile.TemporaryDirectory(prefix="ge-scale-config-") as directory:
             assert source.count("  reboot_timeout: 5min\n") == 2
             assert "ge_scale:" not in source and "actions:" not in source
         else:
+            assert "  - mac_address: !secret ge_scale_mac\n" in source
+            assert "    auto_connect: true\n" in source
             assert "  enable_on_boot: false\n" in source
             assert "    continuous: true\n" in source
+            assert "    active: false\n" in source  # ADV must not wait for SCAN_RSP.
+            assert "    - mac_address: !secret ge_scale_mac\n" in source
+            assert "x.get_address_type()" in source
             assert source.count("  reboot_timeout: 0s\n") == 2
             assert "  batch_delay: 0ms\n" in source
         config = target / name
@@ -46,4 +66,4 @@ with tempfile.TemporaryDirectory(prefix="ge-scale-config-") as directory:
         result = subprocess.run([ESPHOME, "config", str(config)],
                                 capture_output=True, timeout=30)
         assert result.returncode != 0 and b"recording_capacity" in result.stdout + result.stderr
-print("Production/discovery settings and invalid-capacity schema checks passed")
+print("Production/discovery settings, BLE target binding, and invalid-capacity schema checks passed")

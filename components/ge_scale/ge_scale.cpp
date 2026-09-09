@@ -85,7 +85,12 @@ void GEScale::reset_session_() {
 void GEScale::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if,
                                   esp_ble_gattc_cb_param_t *param) {
   switch (event) {
+    case ESP_GATTC_OPEN_EVT:
+      ESP_LOGI(TAG, "GATT open: status=%u addr_type=%u", param->open.status,
+               static_cast<unsigned>(this->parent()->get_remote_addr_type()));
+      break;
     case ESP_GATTC_SEARCH_CMPL_EVT: {
+      ESP_LOGI(TAG, "GATT discovery: status=%u", param->search_cmpl.status);
       this->reset_session_();
       auto *notify_chr = this->parent()->get_characteristic((uint16_t) 0xFFF0, (uint16_t) 0xFFF1);
       auto *write_chr = this->parent()->get_characteristic((uint16_t) 0xFFF0, (uint16_t) 0xFFF2);
@@ -104,12 +109,15 @@ void GEScale::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_t gatt
     case ESP_GATTC_REG_FOR_NOTIFY_EVT: {
       if (param->reg_for_notify.handle != this->notify_handle_)
         break;
+      ESP_LOGI(TAG, "GATT notify registration: status=%u", param->reg_for_notify.status);
       this->node_state = espbt::ClientState::ESTABLISHED;
       ESP_LOGI(TAG, "Notifications on; sending unlock handshake");
       this->start_handshake_();
       break;
     }
     case ESP_GATTC_WRITE_CHAR_EVT: {
+      if (param->write.handle == this->write_handle_)
+        ESP_LOGI(TAG, "GATT write: status=%u", param->write.status);
       // A handshake write was acknowledged: chain the next step immediately instead of
       // waiting out the wall-clock timer (the timers stay armed as a backstop).
       if (param->write.handle == this->write_handle_ && this->handshake_started_ && this->hs_next_ < 4 &&
@@ -124,6 +132,7 @@ void GEScale::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_t gatt
       break;
     }
     case ESP_GATTC_DISCONNECT_EVT: {
+      ESP_LOGI(TAG, "GATT disconnect: reason=%u", param->disconnect.reason);
       if (this->had_live_ && !this->got_result_ && !this->weightonly_published_) {
         ESP_LOGI(TAG, "Disconnected before a result; finalizing weight-only");
         this->finalize_result_(this->last_weight_, -1);
@@ -177,7 +186,7 @@ void GEScale::write_char_(uint16_t handle, const uint8_t *data, uint16_t len, es
 }
 
 void GEScale::handle_frame_(const uint8_t *b, uint16_t len) {
-  ESP_LOGD(TAG, "notify[%u]: %s", len, format_hex_pretty(b, len).c_str());
+  ESP_LOGD(TAG, "GATT frame: type=0x%02x length=%u", b[0], len);
   const uint8_t type = b[0];
   if (type == 0x10 && len > 6) {  // live weight (big-endian at bytes 5-6)
     float w = ((b[5] << 8) | b[6]) / 100.0f;
