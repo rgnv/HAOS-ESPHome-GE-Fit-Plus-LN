@@ -10,7 +10,9 @@ namespace esphome::ge_scale {
 static const char *const TAG = "ge_scale.recording";
 static constexpr uint32_t WIFI_CONNECT_TIMEOUT_MS = 90000;
 static constexpr uint32_t WIFI_RETRY_DELAY_MS = 60000;
-static constexpr uint32_t WIFI_IDLE_GRACE_MS = 5000;
+// Keep native HA entities available long enough to inspect the fresh reading,
+// while retaining the bounded on-demand radio lifecycle.
+static constexpr uint32_t WIFI_IDLE_GRACE_MS = 600000;
 
 #ifdef USE_WIFI
 void GEScale::request_wifi_() {

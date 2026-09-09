@@ -9,6 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 # Source contracts only: no firmware/host compilation or local secrets required.
 recording = (ROOT / "components/ge_scale/recording.cpp").read_text()
+assert "WIFI_IDLE_GRACE_MS = 600000" in recording
 request = recording.split("void GEScale::request_wifi_() {", 1)[1].split(
     "void GEScale::maybe_disable_wifi_()", 1)[0]
 assert request.index("!wifi->is_ready()") < request.index("wifi->enable()")

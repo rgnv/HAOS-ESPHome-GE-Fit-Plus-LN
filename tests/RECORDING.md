@@ -20,9 +20,9 @@ in passive mode. The exact target address matches its advertisement without
 waiting for a scan response; ESPHome keeps the advertised public/random address
 type for GATT open. Discovery firmware still uses active scanning for metadata.
 A finalized record is written to NVS before Wi-Fi is enabled. On boot, a pending
-record also enables Wi-Fi for delivery. After successful live delivery or after
-all replay records are acknowledged, the device waits five seconds for queued API
-messages and disables Wi-Fi again. A failed connection attempt retains records,
+record and disables Wi-Fi again. After successful live delivery or after
+all replay records are acknowledged, the device waits ten minutes for queued API
+messages and to keep the fresh HA reading available, then disables Wi-Fi again. A failed connection attempt retains records,
 disables Wi-Fi after 90 seconds, and retries after a 60-second backoff. Discovery
 keeps Wi-Fi enabled so provisioning remains accessible.
 
