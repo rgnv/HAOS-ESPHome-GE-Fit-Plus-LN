@@ -93,7 +93,8 @@ class GEScale : public Component, public ble_client::BLEClientNode {
   void set_impedance_sensor(int i, sensor::Sensor *s) { this->impedance_sensors_[i] = s; }
   void set_weight_guest_sensor(sensor::Sensor *s) { this->weight_guest_sensor_ = s; }
   // Hidden (disabled-by-default) estimate entities: BMI-based body-comp used when there
-  // is no impedance (feet-only / no bars). Kept off the main entities on purpose.
+  // is no impedance (feet-only / no bars). Main metrics also publish these values
+  // with source=estimate; these diagnostic duplicates remain disabled by default.
   void set_body_fat_estimate_sensor(sensor::Sensor *s) { this->body_fat_estimate_sensor_ = s; }
   void set_body_water_estimate_sensor(sensor::Sensor *s) { this->body_water_estimate_sensor_ = s; }
   void set_protein_estimate_sensor(sensor::Sensor *s) { this->protein_estimate_sensor_ = s; }

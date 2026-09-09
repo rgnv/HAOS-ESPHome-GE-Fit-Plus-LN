@@ -378,14 +378,14 @@ void GEScale::finalize_result_(float weight_kg, int z_whole) {
     publish_(this->muscle_mass_sensor_, muscle_mass_pct);
     publish_(this->skeletal_muscle_sensor_, smm_pct);
     publish_(this->fat_free_mass_sensor_, ffm);
-  } else {  // no impedance -> estimates stay hidden; clear stale trusted metrics
-    publish_(this->body_fat_sensor_, NAN);
-    publish_(this->body_water_sensor_, NAN);
-    publish_(this->protein_sensor_, NAN);
-    publish_(this->bone_mass_sensor_, NAN);
-    publish_(this->muscle_mass_sensor_, NAN);
-    publish_(this->skeletal_muscle_sensor_, NAN);
-    publish_(this->fat_free_mass_sensor_, NAN);
+  } else {  // no impedance -> publish calculated estimates, never fabricate impedance
+    publish_(this->body_fat_sensor_, fat_pct);
+    publish_(this->body_water_sensor_, water_pct);
+    publish_(this->protein_sensor_, protein_pct);
+    publish_(this->bone_mass_sensor_, bone_pct);
+    publish_(this->muscle_mass_sensor_, muscle_mass_pct);
+    publish_(this->skeletal_muscle_sensor_, smm_pct);
+    publish_(this->fat_free_mass_sensor_, ffm);
     publish_(this->z_whole_sensor_, NAN);
     for (auto *sensor : this->impedance_sensors_) publish_(sensor, NAN);
     publish_(this->body_fat_estimate_sensor_, fat_pct);

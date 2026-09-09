@@ -3,8 +3,9 @@
 Production keeps its existing live measurement-ID route. A finalized online
 reading publishes metrics, subject/source, and guest state before its numeric ID;
 `api.batch_delay: 0ms` avoids normal delayed state batching. Transport failure
-and reconnect still require the live-automation safeguards described below. Weight-only readings clear stale
-trusted BIA/impedance states; estimates remain separate. Repeated weights in new
+and reconnect still require the live-automation safeguards described below. Weight-only readings publish
+calculated body-composition estimates with `source=estimate`; trusted
+BIA/impedance-only states remain unknown rather than fabricated. Repeated weights in new
 BLE sessions get new IDs. One session emits one event: a late BIA result can
 update sensors but does not create a second queued/provider write.
 
