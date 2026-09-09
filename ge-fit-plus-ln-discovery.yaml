@@ -22,7 +22,7 @@ logger:
 api:
   encryption:
     key: !secret ge_scale_api_key
-  reboot_timeout: 0s
+  reboot_timeout: 5min
 
 ota:
   - platform: esphome
@@ -32,6 +32,8 @@ wifi:
   ssid: !secret wifi_ssid
   password: !secret wifi_password
   power_save_mode: none
+  post_connect_roaming: false
+  reboot_timeout: 5min
   ap:
     ssid: "GE Fit Plus LN Discovery Setup"
     password: !secret ge_scale_ap_password

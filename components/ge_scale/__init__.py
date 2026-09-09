@@ -6,7 +6,7 @@ import esphome.config_validation as cv
 from esphome.const import CONF_DISABLED_BY_DEFAULT, CONF_ID, CONF_TIME_ID
 
 CODEOWNERS = ["@rgnv"]
-DEPENDENCIES = ["ble_client"]
+DEPENDENCIES = ["ble_client", "api"]
 AUTO_LOAD = ["sensor", "text_sensor", "binary_sensor"]
 
 ge_scale_ns = cg.esphome_ns.namespace("ge_scale")
@@ -94,6 +94,7 @@ def _birthday(value):
 
 _schema = {
     cv.GenerateID(): cv.declare_id(GEScale),
+    cv.Optional("recording_capacity", default=16): cv.int_range(min=1, max=32),
     cv.Optional(CONF_HEIGHT, default=1.78): cv.positive_float,
     cv.Optional(CONF_SEX, default="male"): cv.one_of("male", "female", lower=True),
     cv.Optional(CONF_BIRTHDAY): _birthday,
@@ -127,6 +128,9 @@ async def to_code(config):
     await cg.register_component(var, config)
     await ble_client.register_ble_node(var, config)
 
+    cg.add_define("USE_API_HOMEASSISTANT_SERVICES")
+    cg.add_define("USE_API_HOMEASSISTANT_ACTION_RESPONSES")
+    cg.add(var.set_recording_capacity(config["recording_capacity"]))
     cg.add(var.set_height(config[CONF_HEIGHT]))
     cg.add(var.set_sex_male(config[CONF_SEX] == "male"))
     cg.add(var.set_age_fallback(config[CONF_AGE]))

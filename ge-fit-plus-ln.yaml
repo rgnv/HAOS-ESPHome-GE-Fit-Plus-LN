@@ -23,6 +23,15 @@ api:
   encryption:
     key: !secret ge_scale_api_key
   reboot_timeout: 5min
+  # Preserve metric/state publication order before the measurement ID trigger.
+  batch_delay: 0ms
+  actions:
+    # Explicit recovery only: inspect oldest record before discarding its exact record_id.
+    - action: discard_recording
+      variables:
+        record_id: string
+      then:
+        - lambda: id(ge_fit_plus_ln_data).discard_recording(record_id);
 
 ota:
   - platform: esphome
@@ -60,6 +69,7 @@ ble_client:
 ge_scale:
   id: ge_fit_plus_ln_data
   ble_client_id: ge_scale_client
+  recording_capacity: 16
 
   # Keep personal profile data in secrets.yaml; it is required for BIA calculations.
   height: !secret ge_scale_height_m
@@ -141,3 +151,25 @@ ge_scale:
   is_guest:
     name: "GE Fit Plus LN Guest"
     id: ge_scale_is_guest
+
+# Outbox health and oldest record ID; no health measurements or profile data.
+sensor:
+  - platform: template
+    name: "GE Fit Plus LN Pending Recordings"
+    entity_category: diagnostic
+    accuracy_decimals: 0
+    update_interval: 30s
+    lambda: return id(ge_fit_plus_ln_data).pending_recordings();
+binary_sensor:
+  - platform: template
+    name: "GE Fit Plus LN Recording Storage Healthy"
+    entity_category: diagnostic
+    lambda: return id(ge_fit_plus_ln_data).recording_storage_ok();
+
+text_sensor:
+  - platform: template
+    name: "GE Fit Plus LN Oldest Recording"
+    entity_category: diagnostic
+    disabled_by_default: true
+    update_interval: 30s
+    lambda: return id(ge_fit_plus_ln_data).oldest_recording();

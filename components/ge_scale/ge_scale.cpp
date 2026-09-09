@@ -69,6 +69,7 @@ static inline void publish_(sensor::Sensor *s, float v) {
 
 void GEScale::reset_session_() {
   this->session_generation_++;
+  this->session_impedances_.fill(NAN);
   this->had_live_ = false;
   this->saw_computing_ = false;
   this->got_result_ = false;
@@ -212,6 +213,8 @@ void GEScale::handle_frame_(const uint8_t *b, uint16_t len) {
     int z = (int) lroundf(zsum / 4.0f);
     bool z_valid = (z >= Z_MIN && z <= Z_MAX);
     ESP_LOGI(TAG, "Result: %.2f kg, Z=%d (%s)", w, z, z_valid ? "with bars" : "no bars");
+    if (z_valid)
+      std::copy(imps, imps + 8, this->session_impedances_.begin());
     this->publish_diagnostics_(imps, z_valid ? z : -1);
     // Write the computed numbers back to the scale display FIRST -- that is the
     // "measurement complete" signal to the person standing on it.
@@ -222,6 +225,7 @@ void GEScale::handle_frame_(const uint8_t *b, uint16_t len) {
 }
 
 void GEScale::loop() {
+  this->replay_();
   if (this->node_state != espbt::ClientState::ESTABLISHED)
     return;
   if (!this->had_live_ || this->got_result_ || this->weightonly_published_ ||
@@ -287,14 +291,6 @@ void GEScale::finalize_result_(float weight_kg, int z_whole) {
   // impedance, otherwise the anthropometric (BMI) estimate from weight alone.
   const char *source = z_valid ? "bia" : "estimate";
 
-#ifdef USE_SENSOR
-  if (!this->measurement_id_published_) {
-    this->measurement_id_++;
-    publish_(this->measurement_id_sensor_, (float) this->measurement_id_);
-    this->measurement_id_published_ = true;
-  }
-#endif
-
 #ifdef USE_TEXT_SENSOR
   if (this->subject_sensor_ != nullptr)
     this->subject_sensor_->publish_state(subject);
@@ -309,10 +305,21 @@ void GEScale::finalize_result_(float weight_kg, int z_whole) {
   const float h = this->height_m_;
   const float bmi = weight_kg / (h * h);
 
+  Recording record;
+  record.bia = z_valid;
+  record.guest = !main;
+  record.metrics[0] = weight_kg;
+  record.metrics[1] = static_cast<float>(weight_kg / LB);
+  if (z_valid) {
+    record.metrics[10] = z_whole;
+    std::copy(this->session_impedances_.begin(), this->session_impedances_.end(), record.metrics.begin() + 11);
+  }
+
   if (!main) {  // guest -> hidden weight_guest entity only; the main entities stay untouched
 #ifdef USE_SENSOR
     publish_(this->weight_guest_sensor_, (float) (weight_kg / LB));
 #endif
+    this->record_(record);
     ESP_LOGI(TAG, "Published GUEST weigh-in: %.2f kg -> weight_guest (guest flag set)", weight_kg);
     return;
   }
@@ -347,6 +354,8 @@ void GEScale::finalize_result_(float weight_kg, int z_whole) {
   const float water_pct = 100.0f * water / weight_kg;
   const float protein_pct = 100.0f * protein / weight_kg;
   const float smm_pct = 100.0f * smm / weight_kg;
+  const float values[] = {bmi, fat_pct, water_pct, protein_pct, bone_pct, muscle_mass_pct, smm_pct, ffm};
+  std::copy(values, values + 8, record.metrics.begin() + 2);
 
 #ifdef USE_SENSOR
   if (z_valid) {  // impedance-based -> the real, trusted body-comp on the MAIN entities
@@ -357,7 +366,16 @@ void GEScale::finalize_result_(float weight_kg, int z_whole) {
     publish_(this->muscle_mass_sensor_, muscle_mass_pct);
     publish_(this->skeletal_muscle_sensor_, smm_pct);
     publish_(this->fat_free_mass_sensor_, ffm);
-  } else {  // no impedance -> BMI estimate goes to HIDDEN entities; main ones untouched
+  } else {  // no impedance -> estimates stay hidden; clear stale trusted metrics
+    publish_(this->body_fat_sensor_, NAN);
+    publish_(this->body_water_sensor_, NAN);
+    publish_(this->protein_sensor_, NAN);
+    publish_(this->bone_mass_sensor_, NAN);
+    publish_(this->muscle_mass_sensor_, NAN);
+    publish_(this->skeletal_muscle_sensor_, NAN);
+    publish_(this->fat_free_mass_sensor_, NAN);
+    publish_(this->z_whole_sensor_, NAN);
+    for (auto *sensor : this->impedance_sensors_) publish_(sensor, NAN);
     publish_(this->body_fat_estimate_sensor_, fat_pct);
     publish_(this->body_water_estimate_sensor_, water_pct);
     publish_(this->protein_estimate_sensor_, protein_pct);
@@ -367,6 +385,7 @@ void GEScale::finalize_result_(float weight_kg, int z_whole) {
     publish_(this->fat_free_mass_estimate_sensor_, ffm);
   }
 #endif
+  this->record_(record);  // ID is the final event, after every metric and state.
   ESP_LOGI(TAG, "Published %s: %.2f kg, fat %.1f%%, ffm %.2f kg (%s)", subject, weight_kg, fat_pct, ffm, source);
 }
 

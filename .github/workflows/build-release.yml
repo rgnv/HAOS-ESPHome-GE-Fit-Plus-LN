@@ -41,6 +41,12 @@ jobs:
           python tools/ble_adapter/ge_fit_plus_ln_ha_publisher.py --help
           python -m unittest tools/ble_adapter/test_probe.py
 
+      - name: Test recording outbox
+        run: |
+          g++ -std=c++17 -Wall -Wextra -Werror -I. tests/recording_test.cpp -o /tmp/recording-test
+          /tmp/recording-test
+          python tests/config_test.py
+
       - name: Provide CI-only secrets
         run: cp secrets.ci.yaml secrets.yaml
 

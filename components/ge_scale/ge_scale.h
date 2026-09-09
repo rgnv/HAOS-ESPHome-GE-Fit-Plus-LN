@@ -22,6 +22,8 @@
 
 #include <esp_gattc_api.h>
 #include <cmath>
+#include <nvs.h>
+#include "recording.h"
 
 namespace esphome {
 namespace ge_scale {
@@ -40,7 +42,15 @@ namespace espbt = esphome::esp32_ble_tracker;
 // weight-only reading with a BMI-based body-fat estimate so data keeps flowing.
 class GEScale : public Component, public ble_client::BLEClientNode {
  public:
+  void setup() override;
   void loop() override;
+  void set_recording_capacity(uint32_t n) { this->recordings_.capacity = n; }
+  uint32_t pending_recordings() const { return this->recordings_.count; }
+  bool recording_storage_ok() const { return this->recording_ok_; }
+  std::string oldest_recording() const {
+    return this->recordings_.front() ? this->recordings_.id(this->recordings_.front()->sequence) : "";
+  }
+  void discard_recording(std::string token);
   void dump_config() override;
   float get_setup_priority() const override { return setup_priority::AFTER_BLUETOOTH; }
   void gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if,
@@ -98,6 +108,15 @@ class GEScale : public Component, public ble_client::BLEClientNode {
 #endif
 
  protected:
+  RecordingQueue recordings_;
+  nvs_handle_t recording_nvs_{0};
+  bool recording_ok_{false};
+  uint32_t replay_ms_{0}, pending_call_{0}, fallback_measurement_id_{0};
+  std::array<float, 8> session_impedances_{};
+  bool save_recordings_(const std::vector<uint8_t> &bytes);
+  void record_(Recording &record);
+  void replay_();
+
   // BLE plumbing
   uint16_t notify_handle_{0};  // fff1 (notify)
   uint16_t write_handle_{0};   // fff2 (write)
@@ -139,7 +158,6 @@ class GEScale : public Component, public ble_client::BLEClientNode {
   float weight_tol_kg_{6.0f};
   bool write_back_{false};
   bool filter_guests_{false};
-  uint32_t measurement_id_{0};
 #ifdef USE_TIME
   time::RealTimeClock *time_{nullptr};
 #endif
