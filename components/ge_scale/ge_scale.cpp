@@ -302,7 +302,14 @@ void GEScale::handle_qn_stored_result_(const uint8_t *b, uint16_t len) {
     this->session_impedances_[0] = static_cast<float>(impedance);
     this->finalize_result_(weight, impedance);
   } else {
-    this->finalize_result_(weight, -1);
+    // The extended 0x23 record is often a zero-filled placeholder. Keep its
+    // weight as the pending stable reading and wait for the following 0x10
+    // stable frame, which carries the usable foot-to-foot resistance.
+    this->had_live_ = true;
+    if (fabsf(weight - this->last_weight_) > WEIGHT_STABLE_DELTA)
+      this->last_weight_change_ms_ = millis();
+    this->last_weight_ = weight;
+    ESP_LOGD(TAG, "QN stored result has no BIA; waiting for stable 0x10 resistance");
   }
 }
 
@@ -407,6 +414,22 @@ void GEScale::handle_frame_(const uint8_t *b, uint16_t len) {
       if (fabsf(w - this->last_weight_) > WEIGHT_STABLE_DELTA)
         this->last_weight_change_ms_ = millis();
       this->last_weight_ = w;
+
+      // The Fit Plus long-frame variant reports a stable state (0x02) with
+      // foot-to-foot BIA in bytes 7-10. The values are deci-ohms on this
+      // firmware family; use them internally for the display calculation but
+      // never expose them as HA impedance entities.
+      if (len >= 11 && b[4] == 0x02) {
+        const int r1 = (b[7] << 8) | b[8];
+        const int r2 = (b[9] << 8) | b[10];
+        const int raw_impedance = r1 > 0 ? r1 : r2;
+        const int impedance = static_cast<int>(lroundf(raw_impedance / 10.0f));
+        if (impedance >= Z_MIN && impedance <= Z_MAX) {
+          this->session_impedances_[0] = static_cast<float>(impedance);
+          ESP_LOGI(TAG, "Stable 0x10 foot-BIA received: %.2f kg, internal Z=%d", w, impedance);
+          this->finalize_result_(w, impedance);
+        }
+      }
     }
     return;
   }

@@ -33,6 +33,12 @@ assert "lroundf(this->compute_age_())" in scale
 assert "const uint8_t gender = this->sex_male_ ? 0x00 : 0x01" in scale
 assert "0x10, height_cm, age, gender" in scale
 assert "0x10, 0x00, 0x00, 0x00, 0x00" not in scale
+assert "b[4] == 0x02" in scale
+assert "const int r1 = (b[7] << 8) | b[8]" in scale
+assert "const int r2 = (b[9] << 8) | b[10]" in scale
+assert "raw_impedance / 10.0f" in scale
+assert "Stable 0x10 foot-BIA received" in scale
+assert "QN stored result has no BIA; waiting for stable 0x10 resistance" in scale
 request = recording.split("void GEScale::request_wifi_() {", 1)[1].split(
     "void GEScale::maybe_disable_wifi_()", 1)[0]
 assert request.index("!wifi->is_ready()") < request.index("wifi->enable()")
