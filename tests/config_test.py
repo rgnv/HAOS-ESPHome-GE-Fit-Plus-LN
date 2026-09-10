@@ -21,6 +21,11 @@ assert "this->handle_qn_stored_result_(b, len);" in scale
 assert "len == 18 ? 0x00 : b[2]" in scale
 assert "0x22, 0x06, this->qn_protocol_type_, 0x00, 0x03" in scale
 assert "this->qn_protocol_type_, 0x02, 0x10" in scale
+assert "lroundf(this->height_m_ * 100.0f)" in scale
+assert "lroundf(this->compute_age_())" in scale
+assert "const uint8_t gender = this->sex_male_ ? 0x00 : 0x01" in scale
+assert "0x10, height_cm, age, gender" in scale
+assert "0x10, 0x00, 0x00, 0x00, 0x00" not in scale
 request = recording.split("void GEScale::request_wifi_() {", 1)[1].split(
     "void GEScale::maybe_disable_wifi_()", 1)[0]
 assert request.index("!wifi->is_ready()") < request.index("wifi->enable()")

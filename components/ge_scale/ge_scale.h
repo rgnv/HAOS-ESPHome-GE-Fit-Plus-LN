@@ -41,8 +41,8 @@ namespace espbt = esphome::esp32_ble_tracker;
 // display (the "measurement done" signal), and publishes everything to Home Assistant
 // over the ESPHome native API.
 //
-// If the hand bars are NOT used (no valid whole-body impedance), it still finalizes a
-// weight-only reading with a BMI-based body-fat estimate so data keeps flowing.
+// If no valid impedance is reported, it still finalizes a weight-only reading with a
+// BMI-based body-fat estimate so data keeps flowing.
 class GEScale : public Component, public ble_client::BLEClientNode {
  public:
   void setup() override;
@@ -93,7 +93,7 @@ class GEScale : public Component, public ble_client::BLEClientNode {
   void set_impedance_sensor(int i, sensor::Sensor *s) { this->impedance_sensors_[i] = s; }
   void set_weight_guest_sensor(sensor::Sensor *s) { this->weight_guest_sensor_ = s; }
   // Hidden (disabled-by-default) estimate entities: BMI-based body-comp used when there
-  // is no impedance (feet-only / no bars). Main metrics also publish these values
+  // is no impedance. Main metrics also publish these values
   // with source=estimate; these diagnostic duplicates remain disabled by default.
   void set_body_fat_estimate_sensor(sensor::Sensor *s) { this->body_fat_estimate_sensor_ = s; }
   void set_body_water_estimate_sensor(sensor::Sensor *s) { this->body_water_estimate_sensor_ = s; }
@@ -156,7 +156,7 @@ class GEScale : public Component, public ble_client::BLEClientNode {
 
   // per-connection measurement state
   bool had_live_{false};        // saw at least one live-weight (0x10) frame
-  bool saw_computing_{false};   // saw a 0x23/0xb4 "computing" frame -> hand bars engaged
+  bool saw_computing_{false};   // saw a 0xb4 "computing" frame -> BIA started
   bool got_result_{false};        // published a full 0xb1 BIA result
   bool weightonly_published_{false};  // published a weight-only reading (can be upgraded)
   bool measurement_id_published_{false};

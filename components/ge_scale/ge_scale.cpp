@@ -21,15 +21,15 @@ static const float FRAC_PROTEIN = 0.2279f;
 static const float FRAC_BONE = 0.0502f;
 static const float FRAC_SMM = 0.6458f;
 
-// Whole-body impedance is only produced when the hand bars are held.  Anything
-// outside this band (0, foot-to-foot only, garbage) is treated as "no bars".
+// Accept only plausible whole-body impedance values from the scale's BIA path.
+// A four-pad scale can provide foot-to-foot BIA; missing/invalid data is unknown.
 static const int Z_MIN = 100;
 static const int Z_MAX = 1200;
 
 // Timing.
 static const uint32_t HANDSHAKE_STEP_MS = 200;
-static const uint32_t STABLE_MS = 18000;            // weight steady + no bars -> weight-only
-static const uint32_t COMPUTING_TIMEOUT_MS = 45000;  // bars engaged but no result -> give up
+static const uint32_t STABLE_MS = 18000;            // weight steady + no BIA result -> weight-only
+static const uint32_t COMPUTING_TIMEOUT_MS = 45000;  // BIA started but no result -> give up
 static const uint32_t LEGACY_METRIC_QUIET_MS = 2000; // wait for the 0x02/0xfe burst to finish
 static const float MIN_WEIGHT_KG = 5.0f;
 static const float WEIGHT_STABLE_DELTA = 0.1f;
@@ -217,7 +217,10 @@ void GEScale::handle_qn_scale_info_(const uint8_t *b, uint16_t len) {
   else
     this->qn_protocol_type_ = b[2];
 
-  uint8_t config[] = {0x13, 0x09, this->qn_protocol_type_, 0x02, 0x10, 0x00, 0x00, 0x00, 0x00};  // 0x02 = lb
+  const uint8_t height_cm = static_cast<uint8_t>(fminf(220.0f, fmaxf(60.0f, lroundf(this->height_m_ * 100.0f))));
+  const uint8_t age = static_cast<uint8_t>(fminf(80.0f, fmaxf(6.0f, lroundf(this->compute_age_()))));
+  const uint8_t gender = this->sex_male_ ? 0x00 : 0x01;  // QN wire encoding: male=0, female=1
+  uint8_t config[] = {0x13, 0x09, this->qn_protocol_type_, 0x02, 0x10, height_cm, age, gender, 0x00};  // 0x02 = lb
   for (int i = 0; i < 8; i++) config[8] = static_cast<uint8_t>(config[8] + config[i]);
   this->qn_config_sent_ = true;
   this->write_char_(this->write_handle_, config, sizeof(config), ESP_GATT_WRITE_TYPE_RSP);
@@ -377,8 +380,8 @@ void GEScale::handle_frame_(const uint8_t *b, uint16_t len) {
     this->handle_legacy_frame_(b, len);
     return;
   }
-  ESP_LOGD(TAG, "GATT frame: type=0x%02x length=%u", b[0], len);
   const uint8_t type = b[0];
+  ESP_LOGD(TAG, "GATT frame: type=0x%02x length=%u", type, len);
   if (type == 0x12 && len > 10) {
     this->handle_qn_scale_info_(b, len);
     return;
@@ -407,7 +410,7 @@ void GEScale::handle_frame_(const uint8_t *b, uint16_t len) {
     }
     return;
   }
-  if (type == 0x23 || type == 0xb4) {  // "computing" -> hand bars engaged, impedance sweep running
+  if (type == 0xb4) {  // "computing" -> impedance sweep running
     if (!this->saw_computing_) {
       this->saw_computing_ = true;
       this->computing_since_ms_ = millis();
@@ -430,7 +433,7 @@ void GEScale::handle_frame_(const uint8_t *b, uint16_t len) {
     // impedances (bytes 7-22) sum/4 reproduces the value the body-comp model was fit to.
     int z = (int) lroundf(zsum / 4.0f);
     bool z_valid = (z >= Z_MIN && z <= Z_MAX);
-    ESP_LOGI(TAG, "Result: %.2f kg, Z=%d (%s)", w, z, z_valid ? "with bars" : "no bars");
+    ESP_LOGI(TAG, "Result: %.2f kg, Z=%d (%s)", w, z, z_valid ? "with BIA" : "no BIA");
     if (z_valid)
       std::copy(imps, imps + 8, this->session_impedances_.begin());
     this->publish_diagnostics_(imps, z_valid ? z : -1);
@@ -465,9 +468,9 @@ void GEScale::loop() {
       this->finalize_result_(this->last_weight_, -1);
     return;
   }
-  // No hand bars: weight held steady long enough and no impedance sweep started.
+  // Weight held steady long enough and no impedance sweep started.
   if (!this->saw_computing_ && (now - this->last_weight_change_ms_) > STABLE_MS) {
-    ESP_LOGI(TAG, "Stable weight, no hand bars -> weight-only reading");
+    ESP_LOGI(TAG, "Stable weight, no BIA result -> weight-only reading");
     this->finalize_result_(this->last_weight_, -1);
     return;
   }
@@ -497,7 +500,7 @@ float GEScale::compute_age_() {
 void GEScale::publish_diagnostics_(const float *impedances, int z_whole) {
 #ifdef USE_SENSOR
   if (z_whole <= 0)
-    return;  // no impedance data (feet-only / no bars) -> nothing to report
+    return;  // no accepted impedance data -> nothing to report
   for (int i = 0; i < 8; i++)
     publish_(this->impedance_sensors_[i], impedances[i]);
   publish_(this->z_whole_sensor_, (float) z_whole);
@@ -528,8 +531,8 @@ void GEScale::finalize_result_(float weight_kg, int z_whole) {
 
   const bool main = this->is_main_(weight_kg);
   const char *subject = main ? "primary" : "guest";
-  // Dynamic algorithm selection: full segmental BIA when the hand bars gave us
-  // impedance, otherwise the anthropometric (BMI) estimate from weight alone.
+  // Dynamic algorithm selection: full BIA when a valid impedance is available,
+  // otherwise the anthropometric (BMI) estimate from weight alone.
   const char *source = z_valid ? "bia" : (this->legacy_result_active_ ? "scale" : "estimate");
 
 #ifdef USE_TEXT_SENSOR
@@ -589,7 +592,7 @@ void GEScale::finalize_result_(float weight_kg, int z_whole) {
                   : 1.20f * bmi + 0.23f * this->compute_age_() - 10.8f * (this->sex_male_ ? 1.0f : 0.0f) - 5.4f;
     fat_pct = fmaxf(3.0f, fminf(60.0f, fat_pct));
     ffm = weight_kg * (1.0f - fat_pct / 100.0f);
-  } else {  // no hand bars: BMI-based body-fat estimate (Deurenberg 1991 anthropometric)
+  } else {  // no BIA result: BMI-based body-fat estimate (Deurenberg 1991)
     fat_pct = 1.20f * bmi + 0.23f * this->compute_age_() - 10.8f * (this->sex_male_ ? 1.0f : 0.0f) - 5.4f;
     fat_pct = fmaxf(3.0f, fminf(60.0f, fat_pct));
     ffm = weight_kg * (1.0f - fat_pct / 100.0f);
