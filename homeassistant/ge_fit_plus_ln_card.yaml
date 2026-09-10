@@ -24,24 +24,6 @@ cards:
         name: Skeletal muscle
       - entity: sensor.ge_fit_plus_ln_last_fat_free_mass
         name: Fat-free mass
-      - entity: sensor.ge_fit_plus_ln_last_whole_body_impedance
-        name: Whole-body impedance
-      - entity: sensor.ge_fit_plus_ln_last_impedance_1
-        name: Impedance 1
-      - entity: sensor.ge_fit_plus_ln_last_impedance_2
-        name: Impedance 2
-      - entity: sensor.ge_fit_plus_ln_last_impedance_3
-        name: Impedance 3
-      - entity: sensor.ge_fit_plus_ln_last_impedance_4
-        name: Impedance 4
-      - entity: sensor.ge_fit_plus_ln_last_impedance_5
-        name: Impedance 5
-      - entity: sensor.ge_fit_plus_ln_last_impedance_6
-        name: Impedance 6
-      - entity: sensor.ge_fit_plus_ln_last_impedance_7
-        name: Impedance 7
-      - entity: sensor.ge_fit_plus_ln_last_impedance_8
-        name: Impedance 8
       - entity: sensor.ge_fit_plus_ln_last_measurement_source
         name: Source
       - entity: sensor.ge_fit_plus_ln_last_measurement_subject

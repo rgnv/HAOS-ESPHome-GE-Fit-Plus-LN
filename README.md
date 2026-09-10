@@ -30,8 +30,6 @@ The component exposes:
 - Muscle-mass percentage
 - Skeletal-muscle percentage
 - Fat-free mass
-- Whole-body impedance
-- Eight segmental impedance channels
 - Measurement source and subject diagnostics
 - A measurement sequence ID so repeated readings remain distinguishable in Home Assistant
 
@@ -159,7 +157,7 @@ ESPHome native API discovery creates the device and sensor entities automaticall
 - `homeassistant/ge_fit_plus_ln_last_metrics.yaml` — persistent last-metric mirrors and the local-time 9 PM no-weigh-in reminder.
 - `homeassistant/ge_fit_plus_ln_card.yaml` — dashboard card for the persistent primary and diagnostic metrics.
 
-To use them, include the packages from the HA configuration and paste the card YAML into a dashboard. The last-metrics package keeps the latest finalized values available when the C6 intentionally turns Wi-Fi off; impedance fields remain unknown when the scale did not provide BIA. Home Assistant Recorder normally records enabled ESPHome sensors automatically; the measurement-ID logbook automation preserves a distinct event for every weigh-in.
+To use them, include the packages from the HA configuration and paste the card YAML into a dashboard. The last-metrics package keeps the latest finalized values available when the C6 intentionally turns Wi-Fi off. Home Assistant Recorder normally records enabled ESPHome sensors automatically; the measurement-ID logbook automation preserves a distinct event for every weigh-in.
 
 The public and CI configurations keep `write_back` disabled. A private deployment may set `ge_scale_write_back: true` in its ignored local `secrets.yaml`.
 
@@ -220,7 +218,7 @@ python tools/ble_adapter/ge_fit_plus_ln_probe.py capture \
   --output captures/fit-plus-ln-read-only.jsonl
 ```
 
-When the scale emits stable `0x10` live-weight frames but no full `0xB1` impedance result, the adapter emits a terminal `weight_only_result` after the documented stability/timeout window. With a profile, that event includes the same explicitly estimated body-composition metrics used by the ESPHome fallback; impedance fields remain empty rather than fabricated.
+When the scale emits stable `0x10` live-weight frames but no full body-composition result, the adapter emits a terminal `weight_only_result` after the documented stability/timeout window. With a profile, that event includes the same explicitly estimated body-composition metrics used by the ESPHome fallback.
 
 The ESPHome component handles QN/GE firmware through its notification-driven `0x12 → 0x14 → 0x21` handshake and `0x23` stored result. The Linux tools currently support only the legacy `0x10`/`0xB1` path; QN support remains an open audit finding.
 

@@ -10,6 +10,13 @@ ROOT = Path(__file__).resolve().parents[1]
 # Source contracts only: no firmware/host compilation or local secrets required.
 recording = (ROOT / "components/ge_scale/recording.cpp").read_text()
 scale = (ROOT / "components/ge_scale/ge_scale.cpp").read_text()
+scale_yaml = (ROOT / "ge-fit-plus-ln.yaml").read_text()
+last_metrics_yaml = (ROOT / "homeassistant/ge_fit_plus_ln_last_metrics.yaml").read_text()
+card_yaml = (ROOT / "homeassistant/ge_fit_plus_ln_card.yaml").read_text()
+assert "  whole_body_impedance:" not in scale_yaml
+assert not any(line.startswith("  impedance_") for line in scale_yaml.splitlines())
+assert "last_impedance" not in last_metrics_yaml
+assert "impedance" not in card_yaml.lower()
 assert "WIFI_IDLE_GRACE_MS = 600000" in recording
 assert "publish_(this->body_fat_sensor_, fat_pct);" in scale
 assert "no impedance -> publish calculated estimates" in scale

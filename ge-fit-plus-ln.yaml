@@ -128,33 +128,6 @@ ge_scale:
   fat_free_mass:
     name: "GE Fit Plus LN Fat Free Mass"
     id: ge_scale_fat_free_mass
-  whole_body_impedance:
-    name: "GE Fit Plus LN Whole Body Impedance"
-    id: ge_scale_impedance
-  impedance_1:
-    name: "GE Fit Plus LN Impedance 1"
-    id: ge_scale_impedance_1
-  impedance_2:
-    name: "GE Fit Plus LN Impedance 2"
-    id: ge_scale_impedance_2
-  impedance_3:
-    name: "GE Fit Plus LN Impedance 3"
-    id: ge_scale_impedance_3
-  impedance_4:
-    name: "GE Fit Plus LN Impedance 4"
-    id: ge_scale_impedance_4
-  impedance_5:
-    name: "GE Fit Plus LN Impedance 5"
-    id: ge_scale_impedance_5
-  impedance_6:
-    name: "GE Fit Plus LN Impedance 6"
-    id: ge_scale_impedance_6
-  impedance_7:
-    name: "GE Fit Plus LN Impedance 7"
-    id: ge_scale_impedance_7
-  impedance_8:
-    name: "GE Fit Plus LN Impedance 8"
-    id: ge_scale_impedance_8
   subject:
     name: "GE Fit Plus LN Subject"
     id: ge_scale_subject

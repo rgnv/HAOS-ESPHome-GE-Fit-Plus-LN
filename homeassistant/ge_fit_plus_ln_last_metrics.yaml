@@ -33,33 +33,6 @@ input_text:
   ge_fit_plus_ln_last_fat_free_mass:
     name: GE Fit Plus LN Last Fat Free Mass
     max: 32
-  ge_fit_plus_ln_last_whole_body_impedance:
-    name: GE Fit Plus LN Last Whole Body Impedance
-    max: 32
-  ge_fit_plus_ln_last_impedance_1:
-    name: GE Fit Plus LN Last Impedance 1
-    max: 32
-  ge_fit_plus_ln_last_impedance_2:
-    name: GE Fit Plus LN Last Impedance 2
-    max: 32
-  ge_fit_plus_ln_last_impedance_3:
-    name: GE Fit Plus LN Last Impedance 3
-    max: 32
-  ge_fit_plus_ln_last_impedance_4:
-    name: GE Fit Plus LN Last Impedance 4
-    max: 32
-  ge_fit_plus_ln_last_impedance_5:
-    name: GE Fit Plus LN Last Impedance 5
-    max: 32
-  ge_fit_plus_ln_last_impedance_6:
-    name: GE Fit Plus LN Last Impedance 6
-    max: 32
-  ge_fit_plus_ln_last_impedance_7:
-    name: GE Fit Plus LN Last Impedance 7
-    max: 32
-  ge_fit_plus_ln_last_impedance_8:
-    name: GE Fit Plus LN Last Impedance 8
-    max: 32
   ge_fit_plus_ln_last_source:
     name: GE Fit Plus LN Last Measurement Source
     max: 32
@@ -137,60 +110,6 @@ template:
         unit_of_measurement: kg
         device_class: weight
         state_class: measurement
-      - name: GE Fit Plus LN Last Whole Body Impedance
-        unique_id: ge_fit_plus_ln_last_whole_body_impedance
-        state: "{{ states('input_text.ge_fit_plus_ln_last_whole_body_impedance') }}"
-        availability: "{{ is_number(states('input_text.ge_fit_plus_ln_last_whole_body_impedance')) }}"
-        unit_of_measurement: "Ω"
-        state_class: measurement
-      - name: GE Fit Plus LN Last Impedance 1
-        unique_id: ge_fit_plus_ln_last_impedance_1
-        state: "{{ states('input_text.ge_fit_plus_ln_last_impedance_1') }}"
-        availability: "{{ is_number(states('input_text.ge_fit_plus_ln_last_impedance_1')) }}"
-        unit_of_measurement: "Ω"
-        state_class: measurement
-      - name: GE Fit Plus LN Last Impedance 2
-        unique_id: ge_fit_plus_ln_last_impedance_2
-        state: "{{ states('input_text.ge_fit_plus_ln_last_impedance_2') }}"
-        availability: "{{ is_number(states('input_text.ge_fit_plus_ln_last_impedance_2')) }}"
-        unit_of_measurement: "Ω"
-        state_class: measurement
-      - name: GE Fit Plus LN Last Impedance 3
-        unique_id: ge_fit_plus_ln_last_impedance_3
-        state: "{{ states('input_text.ge_fit_plus_ln_last_impedance_3') }}"
-        availability: "{{ is_number(states('input_text.ge_fit_plus_ln_last_impedance_3')) }}"
-        unit_of_measurement: "Ω"
-        state_class: measurement
-      - name: GE Fit Plus LN Last Impedance 4
-        unique_id: ge_fit_plus_ln_last_impedance_4
-        state: "{{ states('input_text.ge_fit_plus_ln_last_impedance_4') }}"
-        availability: "{{ is_number(states('input_text.ge_fit_plus_ln_last_impedance_4')) }}"
-        unit_of_measurement: "Ω"
-        state_class: measurement
-      - name: GE Fit Plus LN Last Impedance 5
-        unique_id: ge_fit_plus_ln_last_impedance_5
-        state: "{{ states('input_text.ge_fit_plus_ln_last_impedance_5') }}"
-        availability: "{{ is_number(states('input_text.ge_fit_plus_ln_last_impedance_5')) }}"
-        unit_of_measurement: "Ω"
-        state_class: measurement
-      - name: GE Fit Plus LN Last Impedance 6
-        unique_id: ge_fit_plus_ln_last_impedance_6
-        state: "{{ states('input_text.ge_fit_plus_ln_last_impedance_6') }}"
-        availability: "{{ is_number(states('input_text.ge_fit_plus_ln_last_impedance_6')) }}"
-        unit_of_measurement: "Ω"
-        state_class: measurement
-      - name: GE Fit Plus LN Last Impedance 7
-        unique_id: ge_fit_plus_ln_last_impedance_7
-        state: "{{ states('input_text.ge_fit_plus_ln_last_impedance_7') }}"
-        availability: "{{ is_number(states('input_text.ge_fit_plus_ln_last_impedance_7')) }}"
-        unit_of_measurement: "Ω"
-        state_class: measurement
-      - name: GE Fit Plus LN Last Impedance 8
-        unique_id: ge_fit_plus_ln_last_impedance_8
-        state: "{{ states('input_text.ge_fit_plus_ln_last_impedance_8') }}"
-        availability: "{{ is_number(states('input_text.ge_fit_plus_ln_last_impedance_8')) }}"
-        unit_of_measurement: "Ω"
-        state_class: measurement
       - name: GE Fit Plus LN Last Recorded At
         unique_id: ge_fit_plus_ln_last_recorded_at
         state: "{{ states('input_text.ge_fit_plus_ln_last_recorded_at') }}"
@@ -249,24 +168,6 @@ automation:
               source: sensor.ge_fit_plus_ln_skeletal_muscle
             - helper: input_text.ge_fit_plus_ln_last_fat_free_mass
               source: sensor.ge_fit_plus_ln_fat_free_mass
-            - helper: input_text.ge_fit_plus_ln_last_whole_body_impedance
-              source: sensor.ge_fit_plus_ln_whole_body_impedance
-            - helper: input_text.ge_fit_plus_ln_last_impedance_1
-              source: sensor.ge_fit_plus_ln_impedance_1
-            - helper: input_text.ge_fit_plus_ln_last_impedance_2
-              source: sensor.ge_fit_plus_ln_impedance_2
-            - helper: input_text.ge_fit_plus_ln_last_impedance_3
-              source: sensor.ge_fit_plus_ln_impedance_3
-            - helper: input_text.ge_fit_plus_ln_last_impedance_4
-              source: sensor.ge_fit_plus_ln_impedance_4
-            - helper: input_text.ge_fit_plus_ln_last_impedance_5
-              source: sensor.ge_fit_plus_ln_impedance_5
-            - helper: input_text.ge_fit_plus_ln_last_impedance_6
-              source: sensor.ge_fit_plus_ln_impedance_6
-            - helper: input_text.ge_fit_plus_ln_last_impedance_7
-              source: sensor.ge_fit_plus_ln_impedance_7
-            - helper: input_text.ge_fit_plus_ln_last_impedance_8
-              source: sensor.ge_fit_plus_ln_impedance_8
           sequence:
             - service: input_text.set_value
               target:
