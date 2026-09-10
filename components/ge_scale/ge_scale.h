@@ -36,7 +36,7 @@ namespace espbt = esphome::esp32_ble_tracker;
 // GE "Fit Plus" body scale BLE bridge.
 //
 // Connects to the scale as a central, replays the captured unlock handshake, parses
-// the 0xb1 result frame (weight + 8 segmental impedances + whole-body Z), reproduces
+// the legacy 0xb1 result frame and the Fit Plus 0x02/0xfe metric burst, reproduces
 // the Fit Profile app's body-composition numbers, writes them back to the scale's own
 // display (the "measurement done" signal), and publishes everything to Home Assistant
 // over the ESPHome native API.
@@ -123,6 +123,22 @@ class GEScale : public Component, public ble_client::BLEClientNode {
 #endif
   uint32_t replay_ms_{0}, pending_call_{0}, fallback_measurement_id_{0};
   std::array<float, 8> session_impedances_{};
+  bool legacy_mode_seen_{false};
+  bool legacy_stable_{false};
+  bool legacy_metric_seen_{false};
+  bool legacy_result_active_{false};
+  uint32_t legacy_stable_since_ms_{0};
+  uint32_t legacy_last_metric_ms_{0};
+  float legacy_bmi_{NAN};
+  float legacy_fat_pct_{NAN};
+  float legacy_water_pct_{NAN};
+  float legacy_bone_pct_{NAN};
+  float legacy_muscle_pct_{NAN};
+  bool qn_mode_seen_{false};
+  bool qn_config_sent_{false};
+  bool qn_ready_sent_{false};
+  bool qn_history_sent_{false};
+  uint8_t qn_protocol_type_{0};
   bool save_recordings_(const std::vector<uint8_t> &bytes);
   void record_(Recording &record);
   void replay_();
@@ -154,6 +170,12 @@ class GEScale : public Component, public ble_client::BLEClientNode {
   void write_char_(uint16_t handle, const uint8_t *data, uint16_t len, esp_gatt_write_type_t wt);
 
   void handle_frame_(const uint8_t *b, uint16_t len);
+  void handle_legacy_frame_(const uint8_t *b, uint16_t len);
+  void handle_qn_scale_info_(const uint8_t *b, uint16_t len);
+  void handle_qn_ready_();
+  void handle_qn_config_request_();
+  void handle_qn_stored_result_(const uint8_t *b, uint16_t len);
+  void finalize_legacy_result_();
   void finalize_result_(float weight_kg, int z_whole);  // z_whole <= 0 -> weight-only fallback
   void send_display_frames_(float weight_kg, int z_whole);
   void publish_diagnostics_(const float *impedances, int z_whole);

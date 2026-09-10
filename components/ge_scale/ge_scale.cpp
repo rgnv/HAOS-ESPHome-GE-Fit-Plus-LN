@@ -30,6 +30,7 @@ static const int Z_MAX = 1200;
 static const uint32_t HANDSHAKE_STEP_MS = 200;
 static const uint32_t STABLE_MS = 18000;            // weight steady + no bars -> weight-only
 static const uint32_t COMPUTING_TIMEOUT_MS = 45000;  // bars engaged but no result -> give up
+static const uint32_t LEGACY_METRIC_QUIET_MS = 2000; // wait for the 0x02/0xfe burst to finish
 static const float MIN_WEIGHT_KG = 5.0f;
 static const float WEIGHT_STABLE_DELTA = 0.1f;
 
@@ -80,6 +81,22 @@ void GEScale::reset_session_() {
   this->computing_since_ms_ = 0;
   this->handshake_started_ = false;
   this->hs_next_ = 0;
+  this->legacy_mode_seen_ = false;
+  this->legacy_stable_ = false;
+  this->legacy_metric_seen_ = false;
+  this->legacy_result_active_ = false;
+  this->legacy_stable_since_ms_ = 0;
+  this->legacy_last_metric_ms_ = 0;
+  this->legacy_bmi_ = NAN;
+  this->legacy_fat_pct_ = NAN;
+  this->legacy_water_pct_ = NAN;
+  this->legacy_bone_pct_ = NAN;
+  this->legacy_muscle_pct_ = NAN;
+  this->qn_mode_seen_ = false;
+  this->qn_config_sent_ = false;
+  this->qn_ready_sent_ = false;
+  this->qn_history_sent_ = false;
+  this->qn_protocol_type_ = 0;
 }
 
 void GEScale::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if,
@@ -120,7 +137,7 @@ void GEScale::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_t gatt
         ESP_LOGI(TAG, "GATT write: status=%u", param->write.status);
       // A handshake write was acknowledged: chain the next step immediately instead of
       // waiting out the wall-clock timer (the timers stay armed as a backstop).
-      if (param->write.handle == this->write_handle_ && this->handshake_started_ && this->hs_next_ < 4 &&
+      if (param->write.handle == this->write_handle_ && this->handshake_started_ && !this->qn_mode_seen_ && this->hs_next_ < 4 &&
           param->write.status == ESP_GATT_OK)
         this->send_handshake_step_(this->hs_next_);
       break;
@@ -150,24 +167,30 @@ void GEScale::start_handshake_() {
     return;
   this->handshake_started_ = true;
   this->hs_next_ = 0;
-  this->send_handshake_step_(0);
   const uint32_t generation = this->session_generation_;
-  // Backstop timers only: normally each write's ack (ESP_GATTC_WRITE_CHAR_EVT) chains
-  // the next step within tens of ms, and these arrive as no-ops.
-  this->set_timeout("hs1", HANDSHAKE_STEP_MS,
+  // QN firmware emits 0x12 as soon as FFF1 notifications are enabled. Give
+  // that notification-driven state machine a chance before using the legacy
+  // fixed handshake for older scales that never send 0x12.
+  this->set_timeout("legacy_hs", 2 * 1000,
                     [this, generation]() {
-                      if (generation == this->session_generation_)
-                        this->send_handshake_step_(1);
-                    });
-  this->set_timeout("hs2", 2 * HANDSHAKE_STEP_MS,
-                    [this, generation]() {
-                      if (generation == this->session_generation_)
-                        this->send_handshake_step_(2);
-                    });
-  this->set_timeout("hs3", 3 * HANDSHAKE_STEP_MS,
-                    [this, generation]() {
-                      if (generation == this->session_generation_)
-                        this->send_handshake_step_(3);
+                      if (generation != this->session_generation_ || this->qn_mode_seen_)
+                        return;
+                      this->send_handshake_step_(0);
+                      this->set_timeout("hs1", HANDSHAKE_STEP_MS,
+                                        [this, generation]() {
+                                          if (generation == this->session_generation_ && !this->qn_mode_seen_)
+                                            this->send_handshake_step_(1);
+                                        });
+                      this->set_timeout("hs2", 2 * HANDSHAKE_STEP_MS,
+                                        [this, generation]() {
+                                          if (generation == this->session_generation_ && !this->qn_mode_seen_)
+                                            this->send_handshake_step_(2);
+                                        });
+                      this->set_timeout("hs3", 3 * HANDSHAKE_STEP_MS,
+                                        [this, generation]() {
+                                          if (generation == this->session_generation_ && !this->qn_mode_seen_)
+                                            this->send_handshake_step_(3);
+                                        });
                     });
 }
 
@@ -185,9 +208,195 @@ void GEScale::write_char_(uint16_t handle, const uint8_t *data, uint16_t len, es
                            const_cast<uint8_t *>(data), wt, ESP_GATT_AUTH_REQ_NONE);
 }
 
+void GEScale::handle_qn_scale_info_(const uint8_t *b, uint16_t len) {
+  if (this->qn_config_sent_ || len < 3)
+    return;
+  this->qn_mode_seen_ = true;
+  if (len >= 18 && b[1] == len)
+    this->qn_protocol_type_ = len == 18 ? 0x00 : b[2];
+  else
+    this->qn_protocol_type_ = b[2];
+
+  uint8_t config[] = {0x13, 0x09, this->qn_protocol_type_, 0x02, 0x10, 0x00, 0x00, 0x00, 0x00};  // 0x02 = lb
+  for (int i = 0; i < 8; i++) config[8] = static_cast<uint8_t>(config[8] + config[i]);
+  this->qn_config_sent_ = true;
+  this->write_char_(this->write_handle_, config, sizeof(config), ESP_GATT_WRITE_TYPE_RSP);
+  ESP_LOGI(TAG, "QN scale info received; sent config protocol=0x%02x", this->qn_protocol_type_);
+}
+
+void GEScale::handle_qn_ready_() {
+  if (this->qn_ready_sent_)
+    return;
+  this->qn_mode_seen_ = true;
+  this->qn_ready_sent_ = true;
+  uint32_t seconds = 0;
+#ifdef USE_TIME
+  if (this->time_ != nullptr) {
+    auto now = this->time_->now();
+    if (now.is_valid() && now.timestamp >= 946684800)
+      seconds = static_cast<uint32_t>(now.timestamp - 946684800);
+  }
+#endif
+  uint8_t sync[] = {0x20, 0x08, this->qn_protocol_type_, 0x00, 0x00, 0x00, 0x00, 0x00};
+  sync[3] = seconds & 0xff;
+  sync[4] = (seconds >> 8) & 0xff;
+  sync[5] = (seconds >> 16) & 0xff;
+  sync[6] = (seconds >> 24) & 0xff;
+  for (int i = 0; i < 7; i++) sync[7] = static_cast<uint8_t>(sync[7] + sync[i]);
+  this->write_char_(this->write_handle_, sync, sizeof(sync), ESP_GATT_WRITE_TYPE_RSP);
+
+  const uint8_t age = static_cast<uint8_t>(fminf(255.0f, fmaxf(1.0f, this->compute_age_())));
+  const uint32_t generation = this->session_generation_;
+  this->set_timeout("qn_profile", HANDSHAKE_STEP_MS,
+                    [this, generation, age]() {
+                      if (generation == this->session_generation_) {
+                        uint8_t profile[] = {0xa2, 0x06, 0x01, 0x32, age, 0x00};
+                        for (int i = 0; i < 5; i++) profile[5] = static_cast<uint8_t>(profile[5] + profile[i]);
+                        this->write_char_(this->write_handle_, profile, sizeof(profile), ESP_GATT_WRITE_TYPE_RSP);
+                      }
+                    });
+  ESP_LOGI(TAG, "QN ready frame received; sent time sync and profile");
+}
+
+void GEScale::handle_qn_config_request_() {
+  if (this->qn_history_sent_)
+    return;
+  this->qn_mode_seen_ = true;
+  this->qn_history_sent_ = true;
+  uint8_t history[] = {0xa0, 0x0d, 0x04, 0xfc, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+  for (int i = 0; i < 12; i++) history[12] = static_cast<uint8_t>(history[12] + history[i]);
+  this->write_char_(this->write_handle_, history, sizeof(history), ESP_GATT_WRITE_TYPE_RSP);
+  const uint32_t generation = this->session_generation_;
+  this->set_timeout("qn_history", HANDSHAKE_STEP_MS,
+                    [this, generation]() {
+                      if (generation == this->session_generation_) {
+                        uint8_t history_start[] = {0xa0, 0x0d, 0x02, 0x01, 0x00, 0x08, 0x00, 0x21, 0x06, 0xb8, 0x04, 0x02, 0x00};
+                        for (int i = 0; i < 12; i++) history_start[12] = static_cast<uint8_t>(history_start[12] + history_start[i]);
+                        this->write_char_(this->write_handle_, history_start, sizeof(history_start), ESP_GATT_WRITE_TYPE_RSP);
+                      }
+                    });
+  this->set_timeout("qn_start", 2 * HANDSHAKE_STEP_MS,
+                    [this, generation]() {
+                      if (generation == this->session_generation_) {
+                        uint8_t start[] = {0x22, 0x06, this->qn_protocol_type_, 0x00, 0x03, 0x00};
+                        for (int i = 0; i < 5; i++) start[5] = static_cast<uint8_t>(start[5] + start[i]);
+                        this->write_char_(this->write_handle_, start, sizeof(start), ESP_GATT_WRITE_TYPE_RSP);
+                      }
+                    });
+  ESP_LOGI(TAG, "QN config request received; sent history response and start");
+}
+
+void GEScale::handle_qn_stored_result_(const uint8_t *b, uint16_t len) {
+  if (len < 17 || this->got_result_ || this->weightonly_published_)
+    return;
+  const float weight = static_cast<float>((b[10] << 8) | b[11]) / 100.0f;
+  if (weight < MIN_WEIGHT_KG || weight > 300.0f)
+    return;
+  const int r1 = b[13] | (b[14] << 8);
+  const int r2 = b[15] | (b[16] << 8);
+  const int impedance = r1 > 0 ? r1 : r2;
+  if (impedance >= Z_MIN && impedance <= Z_MAX) {
+    this->session_impedances_[0] = static_cast<float>(impedance);
+    this->finalize_result_(weight, impedance);
+  } else {
+    this->finalize_result_(weight, -1);
+  }
+}
+
+void GEScale::handle_legacy_frame_(const uint8_t *b, uint16_t len) {
+  if (len < 7 || b[0] != 0x02)
+    return;
+  uint32_t sum = 0;
+  for (int i = 0; i < 6; i++)
+    sum += b[i];
+  if (static_cast<uint8_t>(sum - 2u) != b[6]) {
+    ESP_LOGD(TAG, "Legacy frame checksum rejected");
+    return;
+  }
+
+  const uint32_t now = millis();
+  if (b[1] == 0xfe) {
+    if (b[5] != 0xcb)
+      return;
+    this->legacy_mode_seen_ = true;
+    const uint8_t metric = b[2];
+    const float value = static_cast<float>((b[3] << 8) | b[4]) / 10.0f;
+    switch (metric) {
+      case 0x00:  // weight, repeated in the metric burst
+        if (value >= MIN_WEIGHT_KG && value <= 300.0f) {
+          this->had_live_ = true;
+          this->last_weight_ = value;
+        }
+        break;
+      case 0x01:  // BMI
+        if (value >= 5.0f && value <= 80.0f) this->legacy_bmi_ = value;
+        else return;
+        break;
+      case 0x02:  // body fat percentage
+        if (value > 0.0f && value < 100.0f) this->legacy_fat_pct_ = value;
+        else return;
+        break;
+      case 0x05:  // total muscle percentage
+        if (value > 0.0f && value < 100.0f) this->legacy_muscle_pct_ = value;
+        else return;
+        break;
+      case 0x07:  // bone percentage
+        if (value >= 0.0f && value < 100.0f) this->legacy_bone_pct_ = value;
+        else return;
+        break;
+      case 0x08:  // total body water percentage
+        if (value > 0.0f && value < 100.0f) this->legacy_water_pct_ = value;
+        else return;
+        break;
+      default:
+        return;  // BMR/other fields are not represented by the current HA schema.
+    }
+    this->legacy_metric_seen_ = true;
+    this->legacy_last_metric_ms_ = now;
+    ESP_LOGD(TAG, "Legacy scale metric received: id=0x%02x", metric);
+    return;
+  }
+
+  if (b[5] != 0xce && b[5] != 0xca)
+    return;
+  this->legacy_mode_seen_ = true;
+  const float weight = static_cast<float>((b[1] << 8) | b[2]) / 10.0f;
+  if (weight < MIN_WEIGHT_KG || weight > 300.0f)
+    return;
+  this->had_live_ = true;
+  if (fabsf(weight - this->last_weight_) > WEIGHT_STABLE_DELTA)
+    this->last_weight_change_ms_ = now;
+  this->last_weight_ = weight;
+  this->legacy_stable_ = b[5] == 0xca;
+  if (this->legacy_stable_)
+    this->legacy_stable_since_ms_ = now;
+}
+
 void GEScale::handle_frame_(const uint8_t *b, uint16_t len) {
+  if (len >= 7 && b[0] == 0x02) {
+    this->handle_legacy_frame_(b, len);
+    return;
+  }
   ESP_LOGD(TAG, "GATT frame: type=0x%02x length=%u", b[0], len);
   const uint8_t type = b[0];
+  if (type == 0x12 && len > 10) {
+    this->handle_qn_scale_info_(b, len);
+    return;
+  }
+  if (type == 0x14) {
+    this->handle_qn_ready_();
+    return;
+  }
+  if (type == 0x21) {
+    this->handle_qn_config_request_();
+    return;
+  }
+  if (type == 0xa1 || type == 0xa3)
+    return;
+  if (type == 0x23 && len >= 17) {
+    this->handle_qn_stored_result_(b, len);
+    return;
+  }
   if (type == 0x10 && len > 6) {  // live weight (big-endian at bytes 5-6)
     float w = ((b[5] << 8) | b[6]) / 100.0f;
     if (w >= MIN_WEIGHT_KG && w <= 300.0f) {
@@ -244,6 +453,18 @@ void GEScale::loop() {
       this->last_weight_ < MIN_WEIGHT_KG)
     return;
   const uint32_t now = millis();
+  if (this->legacy_mode_seen_) {
+    if (!this->legacy_stable_)
+      return;
+    if (this->legacy_metric_seen_ && this->legacy_last_metric_ms_ &&
+        now - this->legacy_last_metric_ms_ > LEGACY_METRIC_QUIET_MS) {
+      this->finalize_legacy_result_();
+      return;
+    }
+    if (this->legacy_stable_since_ms_ && now - this->legacy_stable_since_ms_ > COMPUTING_TIMEOUT_MS)
+      this->finalize_result_(this->last_weight_, -1);
+    return;
+  }
   // No hand bars: weight held steady long enough and no impedance sweep started.
   if (!this->saw_computing_ && (now - this->last_weight_change_ms_) > STABLE_MS) {
     ESP_LOGI(TAG, "Stable weight, no hand bars -> weight-only reading");
@@ -283,6 +504,14 @@ void GEScale::publish_diagnostics_(const float *impedances, int z_whole) {
 #endif
 }
 
+void GEScale::finalize_legacy_result_() {
+  if (!this->legacy_stable_ || this->last_weight_ < MIN_WEIGHT_KG || this->measurement_id_published_)
+    return;
+  this->legacy_result_active_ = true;
+  this->finalize_result_(this->last_weight_, -1);
+  this->legacy_result_active_ = false;
+}
+
 void GEScale::finalize_result_(float weight_kg, int z_whole) {
   if (weight_kg < MIN_WEIGHT_KG)
     return;
@@ -301,7 +530,7 @@ void GEScale::finalize_result_(float weight_kg, int z_whole) {
   const char *subject = main ? "primary" : "guest";
   // Dynamic algorithm selection: full segmental BIA when the hand bars gave us
   // impedance, otherwise the anthropometric (BMI) estimate from weight alone.
-  const char *source = z_valid ? "bia" : "estimate";
+  const char *source = z_valid ? "bia" : (this->legacy_result_active_ ? "scale" : "estimate");
 
 #ifdef USE_TEXT_SENSOR
   if (this->subject_sensor_ != nullptr)
@@ -315,10 +544,11 @@ void GEScale::finalize_result_(float weight_kg, int z_whole) {
 #endif
 
   const float h = this->height_m_;
-  const float bmi = weight_kg / (h * h);
+  float bmi = weight_kg / (h * h);
 
   Recording record;
   record.bia = z_valid;
+  record.scale_metrics = this->legacy_result_active_;
   record.guest = !main;
   record.metrics[0] = weight_kg;
   record.metrics[1] = static_cast<float>(weight_kg / LB);
@@ -351,6 +581,14 @@ void GEScale::finalize_result_(float weight_kg, int z_whole) {
     if (ffm < 1.0f)
       ffm = 1.0f;
     fat_pct = 100.0f * (weight_kg - ffm) / weight_kg;
+  } else if (this->legacy_result_active_) {  // direct Fit Plus metric burst
+    if (std::isfinite(this->legacy_bmi_))
+      bmi = this->legacy_bmi_;
+    fat_pct = std::isfinite(this->legacy_fat_pct_)
+                  ? this->legacy_fat_pct_
+                  : 1.20f * bmi + 0.23f * this->compute_age_() - 10.8f * (this->sex_male_ ? 1.0f : 0.0f) - 5.4f;
+    fat_pct = fmaxf(3.0f, fminf(60.0f, fat_pct));
+    ffm = weight_kg * (1.0f - fat_pct / 100.0f);
   } else {  // no hand bars: BMI-based body-fat estimate (Deurenberg 1991 anthropometric)
     fat_pct = 1.20f * bmi + 0.23f * this->compute_age_() - 10.8f * (this->sex_male_ ? 1.0f : 0.0f) - 5.4f;
     fat_pct = fmaxf(3.0f, fminf(60.0f, fat_pct));
@@ -361,9 +599,12 @@ void GEScale::finalize_result_(float weight_kg, int z_whole) {
   const float protein = FRAC_PROTEIN * ffm;
   const float bone = FRAC_BONE * ffm;
   const float smm = FRAC_SMM * ffm;
-  const float bone_pct = 100.0f * bone / weight_kg;
-  const float muscle_mass_pct = 100.0f - fat_pct - bone_pct;
-  const float water_pct = 100.0f * water / weight_kg;
+  const float bone_pct = this->legacy_result_active_ && std::isfinite(this->legacy_bone_pct_)
+                             ? this->legacy_bone_pct_ : 100.0f * bone / weight_kg;
+  const float muscle_mass_pct = this->legacy_result_active_ && std::isfinite(this->legacy_muscle_pct_)
+                                    ? this->legacy_muscle_pct_ : 100.0f - fat_pct - bone_pct;
+  const float water_pct = this->legacy_result_active_ && std::isfinite(this->legacy_water_pct_)
+                              ? this->legacy_water_pct_ : 100.0f * water / weight_kg;
   const float protein_pct = 100.0f * protein / weight_kg;
   const float smm_pct = 100.0f * smm / weight_kg;
   const float values[] = {bmi, fat_pct, water_pct, protein_pct, bone_pct, muscle_mass_pct, smm_pct, ffm};

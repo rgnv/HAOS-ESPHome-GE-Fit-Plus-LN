@@ -26,7 +26,7 @@ statuses, disconnect reasons, and notification type/length without payloads.
 Existing outbox readiness/backoff fixes were reviewed and retained.
 
 Validation: local configuration/schema checks and `git diff --check` passed.
-Detached `nohup setsid` runner on PVE passed C++ recording tests and the production
+Detached `nohup setsid` runner on Linux host passed C++ recording tests and the production
 firmware build. No compiler ran under the Hermes gateway. The temporary build
 secrets were removed. App0 alone was flashed at `0x10000` with transfer verification;
 its read-back header matched the build and NVS hashes before/after were identical.
@@ -40,29 +40,29 @@ ELF SHA-256 from the flashed app descriptor:
 
 ## Continued incident: coordinated physical retry
 
-The user supplied a subsequent coordinated PVE scan that repeatedly detected the
+The user supplied a subsequent coordinated Linux host scan that repeatedly detected the
 configured physical scale during a real weigh-in, with the expected local name,
 service metadata, and RSSI around -68 to -79 dBm. No phone app was installed.
 This supersedes the earlier uncoordinated scans' absence of the target. It proves
-advertising at the PVE Bluetooth receiver, but does not yet prove reception or
+advertising at the Linux host Bluetooth receiver, but does not yet prove reception or
 connection at the C6 antenna.
 
 Continuation checks:
 
 - Initial HEAD is `8642d69` (`v0.1.12`). Existing edits to `recording.cpp`,
   `tests/config_test.py`, and `tests/RECORDING.md` were preserved.
-- PVE access and C6 serial access work; the Linux publisher remains inactive.
+- Linux host access and C6 serial access work; the Linux publisher remains inactive.
 - Installed ESPHome 2026.8.2 passes the advertised address type through
   `BLEClientBase::parse_device()` to `esp_ble_gattc_open()`. A public/random
   address override is not justified without observing the physical failure.
-- A simultaneous PVE Bleak scan and C6 serial monitor were started. Output is
+- A simultaneous Linux host Bleak scan and C6 serial monitor were started. Output is
   filtered before storage: no raw notification payload, measurement, profile,
   Wi-Fi configuration, or scale address is retained in the diagnostic output.
 - Do not count startup configuration lines `Connecting: 0, ... active: 0` or
   `Connected: NO` as connection events. The initial broad substring filter
   matched these; inspection of redacted messages corrected that interpretation.
 - Local `python3 tests/config_test.py` and `git diff --check` passed.
-- Existing detached PVE runner has successful C++ test and compile exit statuses.
+- Existing detached Linux host runner has successful C++ test and compile exit statuses.
   No new compiler was started in the gateway process.
 - The previously saved flash app descriptor identifies ESPHome 2026.8.2,
   IDF v5.5.5, and ELF SHA-256
@@ -85,10 +85,10 @@ and older completion statements are not findings from the coordinated retry.
 
 ## Hardware follow-up (same day)
 
-- Recovered PVE access and confirmed the C6 USB device is attached. Linux
+- Recovered Linux host access and confirmed the C6 USB device is attached. Linux
   publisher remains disabled and inactive. HA production ESPHome options still
   have `allow_service_calls: true` and `subscribe_logs: false`.
-- Local and PVE production secrets agree on the target; the cached generated
+- Local and Linux host production secrets agree on the target; the cached generated
   source uses that target. The cached build is older (Wi-Fi enabled at boot,
   five-minute watchdogs). Its ELF identity differs from the app0 header read
   from flash, so cached source alone cannot establish the running configuration.
@@ -108,7 +108,7 @@ and older completion statements are not findings from the coordinated retry.
 - Read and verified the NVS partition without erasing it. The recording blob has
   valid NVS and application checksums, capacity 16, pending count 0, and next
   sequence 1. No successful finalized capture has advanced this outbox since its
-  initialization. The backup stays private on PVE; it is not a repository asset.
+  initialization. The backup stays private on Linux host; it is not a repository asset.
 - Default esptool bulk reads failed with `Packet content transfer stopped`.
   A stub read using 1,024-byte blocks and one packet in flight successfully
   recovered NVS and verified the transfer digest. This is a diagnostic transport
@@ -237,3 +237,29 @@ No compilation, flashing, serial access, hardware changes, commits, pushes,
 tags, or releases were performed. Existing C++ recording tests were not built
 or run. Further hardware work must distinguish discovery, notification capture,
 NVS append, Wi-Fi association, API subscription, and provider ACK in that order.
+
+## Verified QN/GE production fix — 2026-09-10
+
+The C6 diagnostic API log captured the real scale session without USB serial:
+
+target advertisement → GATT connect → service discovery → FFF1 registration →
+`0x12` (18-byte scale info) → `0x14` ready → `0x21` config request → repeated
+`0x23`, `0x24`, and `0x25` result frames. The prior parser ignored the state-machine
+frames and treated `0x23` as computing, so it never finalized the stored result.
+
+The production component now:
+
+- waits for `0x12` before using the legacy fixed-handshake fallback;
+- selects protocol byte `0x00` for the observed 18-byte scale-info dialect;
+- sends the notification-driven config, time-sync, history, and start frames;
+- parses the `0x23` stored result at its verified weight/impedance offsets; and
+- sends the QN config unit flag for pounds (`0x02`) rather than changing the scale
+  display to kilograms.
+
+Verification after flashing the production image: a C6-only weigh-in published
+weight `93.35 kg` / `205.80 lb`, BMI, body fat, body water, protein, bone mass,
+muscle mass, skeletal muscle, and fat-free mass. HA measurement ID advanced to
+`2`; the persistent-metric snapshot automation triggered; the Google Health
+automation triggered; and the repository tests plus detached production build
+passed. This session's source is `estimate` because the stored result did not
+contain a usable whole-body impedance value; no impedance was fabricated.

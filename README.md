@@ -218,7 +218,7 @@ python tools/ble_adapter/ge_fit_plus_ln_probe.py capture \\
   --output captures/fit-plus-ln-read-only.jsonl
 ```
 
-When the scale emits stable `0x10` live-weight frames but no full `0xB1` impedance result, the adapter emits a terminal `weight_only_result` after the documented stability/timeout window. With a profile, that event includes the same explicitly estimated body-composition metrics used by the ESPHome fallback; impedance fields remain empty rather than fabricated.
+When the scale emits stable `0x10` live-weight frames but no full `0xB1` impedance result, the adapter emits a terminal `weight_only_result` after the documented stability/timeout window. QN/GE Fit Plus firmware that emits an 18-byte `0x12` scale-info frame is handled through its notification-driven `0x12 → 0x14 → 0x21` handshake and its `0x23` stored measurement result. With a profile, that event includes the same explicitly estimated body-composition metrics used by the ESPHome fallback; impedance fields remain empty rather than fabricated.
 
 If the scale is awake but does not emit result frames passively, explicitly request the protocol unlock sequence:
 
@@ -232,7 +232,7 @@ python tools/ble_adapter/ge_fit_plus_ln_probe.py capture \\
   --output captures/fit-plus-ln-handshake.jsonl
 ```
 
-The `--handshake` mode sends only the four protocol unlock/control frames. Add `--write-back` only when you explicitly want computed display frames sent to the scale; it requires both `--profile` and `--handshake`. Do not run it while Fit Profile is connected to the scale.
+For older firmware, `--handshake` sends the four protocol unlock/control frames. The ESPHome component additionally handles the notification-driven QN/GE sequence when the scale reports an 18-byte `0x12` info frame. Add `--write-back` only when you explicitly want computed display frames sent to the scale; it requires both `--profile` and `--handshake`. Do not run it while Fit Profile is connected to the scale.
 
 Replace `YOUR_SCALE_MAC` with the address returned by `scan`; rescan if the scale advertises a different address.
 

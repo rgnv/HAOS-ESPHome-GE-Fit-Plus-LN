@@ -13,6 +13,14 @@ scale = (ROOT / "components/ge_scale/ge_scale.cpp").read_text()
 assert "WIFI_IDLE_GRACE_MS = 600000" in recording
 assert "publish_(this->body_fat_sensor_, fat_pct);" in scale
 assert "no impedance -> publish calculated estimates" in scale
+assert "b[1] == 0xfe" in scale
+assert "LEGACY_METRIC_QUIET_MS" in scale
+assert "record.scale_metrics = this->legacy_result_active_" in scale
+assert "this->handle_qn_scale_info_(b, len);" in scale
+assert "this->handle_qn_stored_result_(b, len);" in scale
+assert "len == 18 ? 0x00 : b[2]" in scale
+assert "0x22, 0x06, this->qn_protocol_type_, 0x00, 0x03" in scale
+assert "this->qn_protocol_type_, 0x02, 0x10" in scale
 request = recording.split("void GEScale::request_wifi_() {", 1)[1].split(
     "void GEScale::maybe_disable_wifi_()", 1)[0]
 assert request.index("!wifi->is_ready()") < request.index("wifi->enable()")

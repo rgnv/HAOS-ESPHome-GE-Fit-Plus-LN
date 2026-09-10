@@ -9,6 +9,12 @@ BIA/impedance-only states remain unknown rather than fabricated. Repeated weight
 BLE sessions get new IDs. One session emits one event: a late BIA result can
 update sensors but does not create a second queued/provider write.
 
+The Fit Plus `0x02/0xfe` dialect is also accepted on FFF1: stable weight frames
+are followed by checksummed metric records for BMI, body fat, muscle, bone, and
+water. The component holds that session for a short quiet period so the metric
+burst is published as one `source=scale` recording instead of falling back to
+weight-only first.
+
 Offline finalized readings instead enter a durable FIFO. They do not publish a
 new live measurement ID, including during replay. Each record stores capture UTC
 (or zero when unsynchronized), uptime, source/subject flags, and nullable metrics.

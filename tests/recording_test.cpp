@@ -76,6 +76,13 @@ int main() {
   assert(replayable(nullable));
   nullable.metrics[3] = 24;
   assert(replay_body_fat(nullable));  // valid recorded estimate is supported
+  Recording scale_metrics;
+  scale_metrics.metrics[0] = 80;
+  scale_metrics.metrics[2] = 22;
+  scale_metrics.metrics[3] = 24;
+  scale_metrics.scale_metrics = true;
+  assert(scale_metrics.valid());  // direct 0x02/0xfe burst has no whole-body Z field
+  assert(recording_json(q, scale_metrics).find("\"source\":\"scale\"") != std::string::npos);
   nullable.bia = true;
   assert(!replay_body_fat(nullable));  // missing impedance cannot support BIA
   nullable.metrics[10] = 400;

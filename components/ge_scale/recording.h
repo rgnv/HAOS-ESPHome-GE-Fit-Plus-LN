@@ -15,7 +15,7 @@ namespace esphome::ge_scale {
 // Values are frozen at capture, never recomputed with a later profile.
 struct Recording {
   uint32_t sequence{0}, measurement{0}, timestamp{0}, uptime_ms{0};
-  bool bia{false}, guest{false};
+  bool bia{false}, guest{false}, scale_metrics{false};
   // kg, lb, BMI, fat%, water%, protein%, bone%, muscle%, skeletal%, FFM kg,
   // whole-body ohms, then eight segmental ohms. Unavailable values are NaN.
   std::array<float, 19> metrics;
@@ -25,7 +25,8 @@ struct Recording {
     if (timestamp && (timestamp < 1577836800 || timestamp > 4102444799u)) return false;
     for (float f : metrics) if (std::isinf(f)) return false;
     if (std::isfinite(metrics[3]) && (metrics[3] <= 0 || metrics[3] >= 100)) return false;
-    if (!bia) for (size_t i = 10; i < metrics.size(); ++i) if (!std::isnan(metrics[i])) return false;
+    if (!bia && !scale_metrics)
+      for (size_t i = 10; i < metrics.size(); ++i) if (!std::isnan(metrics[i])) return false;
     if (bia && (!std::isfinite(metrics[10]) || metrics[10] < 100 || metrics[10] > 1200)) return false;
     for (size_t i = 11; i < metrics.size(); ++i)
       if (std::isfinite(metrics[i]) && (metrics[i] < 0 || metrics[i] > 5000)) return false;
@@ -60,7 +61,7 @@ struct RecordingQueue {
     for (uint32_t i = 0; i < count; ++i) {
       const auto &r = records[(head + i) % capacity];
       put(r.sequence); put(r.measurement); put(r.timestamp); put(r.uptime_ms);
-      put((r.bia ? 1u : 0u) | (r.guest ? 2u : 0u));
+      put((r.bia ? 1u : 0u) | (r.guest ? 2u : 0u) | (r.scale_metrics ? 4u : 0u));
       for (float f : r.metrics) { uint32_t bits; static_assert(sizeof(f) == sizeof(bits));
         memcpy(&bits, &f, sizeof(bits)); put(bits); }
     }
@@ -90,9 +91,9 @@ struct RecordingQueue {
       auto &r = q->records[i];
       r.sequence = get(); r.measurement = get(); r.timestamp = get(); r.uptime_ms = get();
       uint32_t flags = get();
-      if (flags > 3 || r.sequence <= previous || r.sequence >= q->next ||
+      if (flags > 7 || r.sequence <= previous || r.sequence >= q->next ||
           !r.measurement || r.measurement > r.sequence) return false;
-      previous = r.sequence; r.bia = flags & 1; r.guest = flags & 2;
+      previous = r.sequence; r.bia = flags & 1; r.guest = flags & 2; r.scale_metrics = flags & 4;
       for (float &f : r.metrics) { uint32_t bits = get(); memcpy(&f, &bits, sizeof(f)); if (std::isinf(f)) return false; }
       if (!r.valid()) return false;
     }
@@ -145,7 +146,8 @@ inline std::string recording_json(const RecordingQueue &q, const Recording &r) {
     "skeletal_muscle_percent", "fat_free_mass_kg", "whole_body_impedance_ohm",
     "impedance_1", "impedance_2", "impedance_3", "impedance_4", "impedance_5", "impedance_6", "impedance_7", "impedance_8"};
   std::string out = "{\"schema\":1,\"record_id\":\"" + q.id(r.sequence) + "\",\"measurement_id\":\"" +
-    q.id(r.measurement) + "\",\"source\":\"" + (r.bia ? "bia" : "estimate") +
+    q.id(r.measurement) + "\",\"source\":\"" +
+    (r.bia ? "bia" : (r.scale_metrics ? "scale" : "estimate")) +
     "\",\"subject\":\"" + (r.guest ? "guest" : "primary") + "\",\"timestamp\":";
   out += r.timestamp ? std::to_string(r.timestamp) : "null";
   out += ",\"uptime_ms\":" + std::to_string(r.uptime_ms);
