@@ -3,6 +3,8 @@
 ESPHome integration for a GE Fit Plus LN body scale over Bluetooth Low Energy.
 The production target is an ESP32-C6 running ESPHome and publishing entities to Home Assistant through the ESPHome native API.
 
+See [AUDIT.md](AUDIT.md) for verified fixes, open findings, and validation limits.
+
 ## Compatibility
 
 Validated hardware capture:
@@ -163,7 +165,7 @@ The public and CI configurations keep `write_back` disabled. A private deploymen
 
 ## Google Health Connect integration (phase 2)
 
-The Health Connect bridge design and event schema are in `health-connect/`. A separate Android companion app will poll the HA measurement ID, deduplicate locally, and initially write WeightRecord and BodyFatRecord with minimal permissions. It is intentionally separate from HAOS because Health Connect is an Android on-device API.
+The Android companion app and event schema are in `health-connect/`. The app polls HA and writes weight and Gluroo blood-glucose records; body-fat records are not implemented. See the audit before relying on unattended sync. Health Connect is an Android on-device API, so this app runs separately from HAOS.
 
 ## Secondary Linux Bluetooth adapter path
 
@@ -204,31 +206,32 @@ python tools/ble_adapter/ge_fit_plus_ln_probe.py scan --seconds 30 --name "Fit P
 Inspect GATT without pairing or writing:
 
 ```bash
-python tools/ble_adapter/ge_fit_plus_ln_probe.py inspect \\
+python tools/ble_adapter/ge_fit_plus_ln_probe.py inspect \
   --address YOUR_SCALE_MAC
 ```
 
 Capture notifications without writing anything:
 
 ```bash
-python tools/ble_adapter/ge_fit_plus_ln_probe.py capture \\
-  --address YOUR_SCALE_MAC \\
-  --seconds 90 \\
-  --profile profiles/my-profile.json \\
+python tools/ble_adapter/ge_fit_plus_ln_probe.py capture \
+  --address YOUR_SCALE_MAC \
+  --seconds 90 \
+  --profile profiles/my-profile.json \
   --output captures/fit-plus-ln-read-only.jsonl
 ```
 
-When the scale emits stable `0x10` live-weight frames but no full `0xB1` impedance result, the adapter emits a terminal `weight_only_result` after the documented stability/timeout window. QN/GE Fit Plus firmware that emits an 18-byte `0x12` scale-info frame is handled through its notification-driven `0x12 → 0x14 → 0x21` handshake and its `0x23` stored measurement result. With a profile, that event includes the same explicitly estimated body-composition metrics used by the ESPHome fallback; impedance fields remain empty rather than fabricated.
+When the scale emits stable `0x10` live-weight frames but no full `0xB1` impedance result, the adapter emits a terminal `weight_only_result` after the documented stability/timeout window. With a profile, that event includes the same explicitly estimated body-composition metrics used by the ESPHome fallback; impedance fields remain empty rather than fabricated.
+
+The ESPHome component handles QN/GE firmware through its notification-driven `0x12 → 0x14 → 0x21` handshake and `0x23` stored result. The Linux tools currently support only the legacy `0x10`/`0xB1` path; QN support remains an open audit finding.
 
 If the scale is awake but does not emit result frames passively, explicitly request the protocol unlock sequence:
 
 ```bash
-python tools/ble_adapter/ge_fit_plus_ln_probe.py capture \\
-  --address YOUR_SCALE_MAC \\
-  --seconds 90 \\
-  --profile profiles/my-profile.json \\
-  --handshake \\
-  --write-back \\
+python tools/ble_adapter/ge_fit_plus_ln_probe.py capture \
+  --address YOUR_SCALE_MAC \
+  --seconds 90 \
+  --profile profiles/my-profile.json \
+  --handshake \
   --output captures/fit-plus-ln-handshake.jsonl
 ```
 

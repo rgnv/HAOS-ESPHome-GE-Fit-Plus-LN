@@ -15,6 +15,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import math
 import sys
 import time
 from collections import Counter
@@ -86,10 +87,12 @@ class Profile:
         birthday = str(raw["birthday"])
         if sex not in {"male", "female"}:
             raise ValueError("profile sex must be male or female")
-        if height_m <= 0:
-            raise ValueError("profile height_m must be positive")
+        if not math.isfinite(height_m) or height_m <= 0:
+            raise ValueError("profile height_m must be finite and positive")
         year, month, day = (int(part) for part in birthday.split("-"))
         birthday_date = date(year, month, day)
+        if birthday_date > date.today():
+            raise ValueError("profile birthday must not be in the future")
         age_value = raw.get("age")
         if age_value is None:
             today = date.today()
@@ -97,8 +100,8 @@ class Profile:
                 (today.month, today.day) < (birthday_date.month, birthday_date.day)
             )
         age = float(age_value)
-        if age <= 0:
-            raise ValueError("profile age must be positive")
+        if not math.isfinite(age) or age <= 0:
+            raise ValueError("profile age must be finite and positive")
         return cls(name, height_m, sex, birthday, age)
 
 
@@ -303,7 +306,7 @@ def build_display_frames(weight_kg: float, z_whole: int, profile: Profile) -> tu
     frame = bytearray((0x1C, 0x13, 0xFF))
     for value in fields[:7]:
         frame.extend((value & 0xFF, (value >> 8) & 0xFF))
-    frame.append(fields[7] & 0xFF)
+    frame.append(min(fields[7], 0xFF))
     frame.append(sum(frame) & 0xFF)
     return bytes(frame), bytes.fromhex("1f05ff1033")
 

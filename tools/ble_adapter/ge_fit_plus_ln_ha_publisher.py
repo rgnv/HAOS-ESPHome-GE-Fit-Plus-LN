@@ -114,8 +114,6 @@ class HomeAssistantPublisher:
         }
         for key, (entity_id, unit, device_class, friendly_name) in METRIC_ENTITIES.items():
             value = metrics.get(key)
-            if value is None:
-                continue
             attrs = dict(common)
             attrs["friendly_name"] = friendly_name
             if unit is not None:
@@ -123,7 +121,7 @@ class HomeAssistantPublisher:
             if device_class is not None:
                 attrs["device_class"] = device_class
             attrs["state_class"] = "measurement"
-            self.publish(entity_id, value, attrs)
+            self.publish(entity_id, value if value is not None else "unknown", attrs)
 
         fat_free_mass_kg = metrics.get("fat_free_mass_kg")
         if fat_free_mass_kg is not None:
@@ -139,11 +137,12 @@ class HomeAssistantPublisher:
                 },
             )
 
-        impedance = metrics.get("impedance_ohm") or []
+        impedance = list(metrics.get("impedance_ohm") or [])[:8]
+        impedance += [None] * (8 - len(impedance))
         for index, value in enumerate(impedance, start=1):
             self.publish(
                 f"sensor.ge_fit_plus_ln_impedance_{index}",
-                value,
+                value if value is not None else "unknown",
                 {
                     **common,
                     "friendly_name": f"GE Fit Plus LN Impedance {index}",
@@ -152,14 +151,20 @@ class HomeAssistantPublisher:
                 },
             )
         self.publish(
-            "sensor.ge_fit_plus_ln_measurement_id",
-            measurement_id,
-            {**common, "friendly_name": "GE Fit Plus LN Measurement ID"},
+            "sensor.ge_fit_plus_ln_subject",
+            "primary",
+            {**common, "friendly_name": "GE Fit Plus LN Subject"},
         )
         self.publish(
             "sensor.ge_fit_plus_ln_measurement_source",
             metrics.get("source", "estimate"),
             {**common, "friendly_name": "GE Fit Plus LN Measurement Source"},
+        )
+        # Consumers treat the ID change as the completed measurement event.
+        self.publish(
+            "sensor.ge_fit_plus_ln_measurement_id",
+            measurement_id,
+            {**common, "friendly_name": "GE Fit Plus LN Measurement ID"},
         )
 
 
@@ -209,9 +214,9 @@ async def capture_once(
     notification_count = 0
     publish_task: asyncio.Task[None] | None = None
     published = False
-    measured_at = utc_now().isoformat()
+    last_live_at = ""
 
-    async def publish_metrics(metrics: dict[str, Any]) -> None:
+    async def publish_metrics(metrics: dict[str, Any], measured_at: str) -> None:
         nonlocal published
         if published:
             return
@@ -225,7 +230,7 @@ async def capture_once(
         LOGGER.info("published measurement %s (%.3f kg, source=%s)", measurement_id, metrics["weight_kg"], metrics["source"])
 
     def on_notification(_: Any, data: bytearray) -> None:
-        nonlocal last_live_weight, last_live_change, computing_started, result_seen, notification_count, publish_task
+        nonlocal last_live_weight, last_live_change, computing_started, result_seen, notification_count, publish_task, last_live_at
         notification_count += 1
         decoded = decode_frame(bytes(data), profile)
         if decoded is None:
@@ -237,13 +242,14 @@ async def capture_once(
             if last_live_weight is None or abs(weight - last_live_weight) > WEIGHT_STABLE_DELTA_KG:
                 last_live_change = now
             last_live_weight = weight
+            last_live_at = utc_now().isoformat()
         elif kind == "computing" and computing_started is None:
             computing_started = now
         elif kind == "result":
             result_seen = True
             metrics = decoded.get("metrics")
             if isinstance(metrics, dict) and publish_task is None:
-                publish_task = asyncio.create_task(publish_metrics(metrics))
+                publish_task = asyncio.create_task(publish_metrics(metrics, utc_now().isoformat()))
 
     try:
         async with asyncio.timeout(20):
@@ -267,7 +273,7 @@ async def capture_once(
             if stable_for >= STABLE_SECONDS and (
                 computing_for is None or computing_for >= COMPUTING_TIMEOUT_SECONDS
             ):
-                await publish_metrics(compute_weight_only_metrics(last_live_weight, profile))
+                await publish_metrics(compute_weight_only_metrics(last_live_weight, profile), last_live_at)
         if publish_task is not None:
             await publish_task
         LOGGER.info(

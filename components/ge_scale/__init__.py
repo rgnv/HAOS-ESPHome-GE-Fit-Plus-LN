@@ -1,4 +1,6 @@
+import math
 import re
+from datetime import date
 
 import esphome.codegen as cg
 from esphome.components import binary_sensor, ble_client, sensor, text_sensor, time
@@ -89,16 +91,29 @@ def _birthday(value):
     value = cv.string_strict(value)
     if not re.match(r"^\d{4}-\d{2}-\d{2}$", value):
         raise cv.Invalid("birthday must be in YYYY-MM-DD format")
+    try:
+        birthday = date.fromisoformat(value)
+    except ValueError as exc:
+        raise cv.Invalid("birthday must be a valid calendar date") from exc
+    if birthday > date.today():
+        raise cv.Invalid("birthday must not be in the future")
+    return value
+
+
+def _positive_finite(value):
+    value = cv.positive_float(value)
+    if not math.isfinite(value) or value <= 0:
+        raise cv.Invalid("value must be finite and positive")
     return value
 
 
 _schema = {
     cv.GenerateID(): cv.declare_id(GEScale),
     cv.Optional("recording_capacity", default=16): cv.int_range(min=1, max=32),
-    cv.Optional(CONF_HEIGHT, default=1.78): cv.positive_float,
+    cv.Optional(CONF_HEIGHT, default=1.78): _positive_finite,
     cv.Optional(CONF_SEX, default="male"): cv.one_of("male", "female", lower=True),
     cv.Optional(CONF_BIRTHDAY): _birthday,
-    cv.Optional(CONF_AGE, default=25.0): cv.positive_float,
+    cv.Optional(CONF_AGE, default=25.0): _positive_finite,
     cv.Optional(CONF_EXPECTED_WEIGHT, default=74.0): cv.positive_float,
     cv.Optional(CONF_WEIGHT_TOLERANCE, default=6.0): cv.positive_float,
     cv.Optional(CONF_WRITE_BACK, default=False): cv.boolean,

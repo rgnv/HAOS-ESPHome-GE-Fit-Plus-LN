@@ -40,8 +40,7 @@ if ESPHOME is None:
             ESPHOME = str(candidate)
             break
 if ESPHOME is None:
-    print("ESPHome executable unavailable; configuration checks skipped")
-    raise SystemExit(0)
+    raise SystemExit("ESPHome executable unavailable; install the pinned version to run configuration checks")
 
 with tempfile.TemporaryDirectory(prefix="ge-scale-config-") as directory:
     target = Path(directory)
@@ -78,4 +77,14 @@ with tempfile.TemporaryDirectory(prefix="ge-scale-config-") as directory:
         result = subprocess.run([ESPHOME, "config", str(config)],
                                 capture_output=True, timeout=30)
         assert result.returncode != 0 and b"recording_capacity" in result.stdout + result.stderr
+    invalid_profiles = [("birthday", value) for value in ('"2000-02-30"', '"2999-01-01"')]
+    invalid_profiles += [(key, value) for key in ("height", "age") for value in ("0", ".nan", ".inf")]
+    for key, value in invalid_profiles:
+        lines = source.splitlines()
+        config.write_text("\n".join(
+            f"  {key}: {value}" if line.startswith(f"  {key}:") else line for line in lines
+        ) + "\n")
+        result = subprocess.run([ESPHOME, "config", str(config)], capture_output=True, timeout=30)
+        assert result.returncode != 0 and key.encode() in result.stdout + result.stderr, (key, value)
 print("Production/discovery settings, BLE target binding, and invalid-capacity schema checks passed")
+print("Invalid birthdays and nonfinite/zero profile values rejected")
