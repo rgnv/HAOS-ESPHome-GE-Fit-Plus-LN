@@ -33,6 +33,14 @@ assert "lroundf(this->compute_age_())" in scale
 assert "const uint8_t gender = this->sex_male_ ? 0x00 : 0x01" in scale
 assert "0x10, height_cm, age, gender" in scale
 assert "0x10, 0x00, 0x00, 0x00, 0x00" not in scale
+assert "this->qn_info_length_ = len;" in scale
+assert "len == 18 && b[2] == 0xff" in scale
+assert "VENDOR_CONFIG[] = {0x13, 0x0a, 0xff, 0x02, 0x10, 0x00, 0x00, 0x00, 0xb4, 0xe2}" in scale
+assert "0x20, 0x09, this->qn_protocol_type_" in scale
+assert "without A2 profile" in scale
+assert "VENDOR_HISTORY[] = {0xa0, 0x0d, 0x02, 0xfe, 0xff, 0xee" in scale
+assert "0x22, 0x06, this->qn_protocol_type_, 0x00, 0x01" in scale
+assert "this->qn_info_length_ != 20" in scale
 assert "b[4] == 0x02" in scale
 assert "const int r1 = (b[7] << 8) | b[8]" in scale
 assert "const int r2 = (b[9] << 8) | b[10]" in scale

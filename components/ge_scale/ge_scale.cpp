@@ -96,7 +96,9 @@ void GEScale::reset_session_() {
   this->qn_config_sent_ = false;
   this->qn_ready_sent_ = false;
   this->qn_history_sent_ = false;
+  this->qn_trigger_sent_ = false;
   this->qn_protocol_type_ = 0;
+  this->qn_info_length_ = 0;
 }
 
 void GEScale::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if,
@@ -212,17 +214,30 @@ void GEScale::handle_qn_scale_info_(const uint8_t *b, uint16_t len) {
   if (this->qn_config_sent_ || len < 3)
     return;
   this->qn_mode_seen_ = true;
-  if (len >= 18 && b[1] == len)
-    this->qn_protocol_type_ = len == 18 ? 0x00 : b[2];
-  else
+  this->qn_info_length_ = len;
+  if (len >= 18 && b[1] == len) {
+    // The captured 18-byte Fit Plus frame carries 0xff and the vendor app
+    // echoes it. Other long-frame variants keep the historical 0x00 fallback.
+    this->qn_protocol_type_ = (len == 18 && b[2] == 0xff) ? b[2] : (len == 18 ? 0x00 : b[2]);
+  } else {
     this->qn_protocol_type_ = b[2];
+  }
+
+  this->qn_config_sent_ = true;
+  if (this->qn_info_length_ == 18 && this->qn_protocol_type_ == 0xff) {
+    // Exact vendor-app config for this firmware: changing the frame shape or
+    // populating these reserved bytes suppresses the subsequent BIA phase.
+    static const uint8_t VENDOR_CONFIG[] = {0x13, 0x0a, 0xff, 0x02, 0x10, 0x00, 0x00, 0x00, 0xb4, 0xe2};
+    this->write_char_(this->write_handle_, VENDOR_CONFIG, sizeof(VENDOR_CONFIG), ESP_GATT_WRITE_TYPE_RSP);
+    ESP_LOGI(TAG, "QN Fit Plus 18-byte scale info received; sent vendor config");
+    return;
+  }
 
   const uint8_t height_cm = static_cast<uint8_t>(fminf(220.0f, fmaxf(60.0f, lroundf(this->height_m_ * 100.0f))));
   const uint8_t age = static_cast<uint8_t>(fminf(80.0f, fmaxf(6.0f, lroundf(this->compute_age_()))));
   const uint8_t gender = this->sex_male_ ? 0x00 : 0x01;  // QN wire encoding: male=0, female=1
   uint8_t config[] = {0x13, 0x09, this->qn_protocol_type_, 0x02, 0x10, height_cm, age, gender, 0x00};  // 0x02 = lb
   for (int i = 0; i < 8; i++) config[8] = static_cast<uint8_t>(config[8] + config[i]);
-  this->qn_config_sent_ = true;
   this->write_char_(this->write_handle_, config, sizeof(config), ESP_GATT_WRITE_TYPE_RSP);
   ESP_LOGI(TAG, "QN scale info received; sent config protocol=0x%02x", this->qn_protocol_type_);
 }
@@ -240,6 +255,22 @@ void GEScale::handle_qn_ready_() {
       seconds = static_cast<uint32_t>(now.timestamp - 946684800);
   }
 #endif
+  if (this->qn_info_length_ == 18 && this->qn_protocol_type_ == 0xff) {
+    // Vendor-app sequence for the 18-byte Fit Plus dialect: use the 9-byte
+    // time-sync form and do not send the generic A2 profile frame. That A2
+    // payload is interpreted as a weight anchor by this firmware and prevents
+    // the scale from entering its BIA phase.
+    uint8_t sync[] = {0x20, 0x09, this->qn_protocol_type_, 0x00, 0x00, 0x00, 0x00, 0x08, 0x00};
+    sync[3] = seconds & 0xff;
+    sync[4] = (seconds >> 8) & 0xff;
+    sync[5] = (seconds >> 16) & 0xff;
+    sync[6] = (seconds >> 24) & 0xff;
+    for (int i = 0; i < 8; i++) sync[8] = static_cast<uint8_t>(sync[8] + sync[i]);
+    this->write_char_(this->write_handle_, sync, sizeof(sync), ESP_GATT_WRITE_TYPE_RSP);
+    ESP_LOGI(TAG, "QN Fit Plus ready; sent vendor time sync without A2 profile");
+    return;
+  }
+
   uint8_t sync[] = {0x20, 0x08, this->qn_protocol_type_, 0x00, 0x00, 0x00, 0x00, 0x00};
   sync[3] = seconds & 0xff;
   sync[4] = (seconds >> 8) & 0xff;
@@ -266,6 +297,23 @@ void GEScale::handle_qn_config_request_() {
     return;
   this->qn_mode_seen_ = true;
   this->qn_history_sent_ = true;
+  if (this->qn_info_length_ == 18 && this->qn_protocol_type_ == 0xff) {
+    static const uint8_t VENDOR_HISTORY[] = {0xa0, 0x0d, 0x02, 0xfe, 0xff, 0xee, 0x00,
+                                              0x19, 0x06, 0xf4, 0x04, 0x02, 0xb3};
+    this->write_char_(this->write_handle_, VENDOR_HISTORY, sizeof(VENDOR_HISTORY), ESP_GATT_WRITE_TYPE_RSP);
+    const uint32_t generation = this->session_generation_;
+    this->set_timeout("qn_start", HANDSHAKE_STEP_MS,
+                      [this, generation]() {
+                        if (generation != this->session_generation_)
+                          return;
+                        uint8_t start[] = {0x22, 0x06, this->qn_protocol_type_, 0x00, 0x01, 0x00};
+                        for (int i = 0; i < 5; i++) start[5] = static_cast<uint8_t>(start[5] + start[i]);
+                        this->write_char_(this->write_handle_, start, sizeof(start), ESP_GATT_WRITE_TYPE_RSP);
+                      });
+    ESP_LOGI(TAG, "QN Fit Plus config request; sent vendor history response and start");
+    return;
+  }
+
   uint8_t history[] = {0xa0, 0x0d, 0x04, 0xfc, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
   for (int i = 0; i < 12; i++) history[12] = static_cast<uint8_t>(history[12] + history[i]);
   this->write_char_(this->write_handle_, history, sizeof(history), ESP_GATT_WRITE_TYPE_RSP);
@@ -298,6 +346,7 @@ void GEScale::handle_qn_stored_result_(const uint8_t *b, uint16_t len) {
   const int r1 = b[13] | (b[14] << 8);
   const int r2 = b[15] | (b[16] << 8);
   const int impedance = r1 > 0 ? r1 : r2;
+  this->send_qn_measurement_trigger_(weight);
   if (impedance >= Z_MIN && impedance <= Z_MAX) {
     this->session_impedances_[0] = static_cast<float>(impedance);
     this->finalize_result_(weight, impedance);
@@ -311,6 +360,31 @@ void GEScale::handle_qn_stored_result_(const uint8_t *b, uint16_t len) {
     this->last_weight_ = weight;
     ESP_LOGD(TAG, "QN stored result has no BIA; waiting for stable 0x10 resistance");
   }
+}
+
+void GEScale::send_qn_measurement_trigger_(float weight_kg) {
+  if (this->qn_info_length_ != 20 || this->qn_protocol_type_ != 0xff || this->qn_trigger_sent_ ||
+      weight_kg < MIN_WEIGHT_KG || weight_kg > 300.0f)
+    return;
+  const uint16_t raw_weight = static_cast<uint16_t>(lroundf(weight_kg * 100.0f));
+  uint8_t trigger[] = {0xa2, 0x06, 0x01, static_cast<uint8_t>((raw_weight >> 8) & 0xff),
+                       static_cast<uint8_t>(raw_weight & 0xff), 0x00};
+  for (int i = 0; i < 5; i++)
+    trigger[5] = static_cast<uint8_t>(trigger[5] + trigger[i]);
+  this->qn_trigger_sent_ = true;
+  this->write_char_(this->write_handle_, trigger, sizeof(trigger), ESP_GATT_WRITE_TYPE_RSP);
+  const uint32_t generation = this->session_generation_;
+  this->set_timeout("qn_trigger_repeat", 150,
+                    [this, generation, raw_weight]() {
+                      if (generation != this->session_generation_)
+                        return;
+                      uint8_t repeat[] = {0xa2, 0x06, 0x01, static_cast<uint8_t>((raw_weight >> 8) & 0xff),
+                                          static_cast<uint8_t>(raw_weight & 0xff), 0x00};
+                      for (int i = 0; i < 5; i++)
+                        repeat[5] = static_cast<uint8_t>(repeat[5] + repeat[i]);
+                      this->write_char_(this->write_handle_, repeat, sizeof(repeat), ESP_GATT_WRITE_TYPE_RSP);
+                    });
+  ESP_LOGI(TAG, "QN measurement trigger sent twice for %.2f kg", weight_kg);
 }
 
 void GEScale::handle_legacy_frame_(const uint8_t *b, uint16_t len) {
@@ -414,6 +488,8 @@ void GEScale::handle_frame_(const uint8_t *b, uint16_t len) {
       if (fabsf(w - this->last_weight_) > WEIGHT_STABLE_DELTA)
         this->last_weight_change_ms_ = millis();
       this->last_weight_ = w;
+      if (this->qn_mode_seen_ && !this->qn_trigger_sent_)
+        this->send_qn_measurement_trigger_(w);
 
       // The Fit Plus long-frame variant reports a stable state (0x02) with
       // foot-to-foot BIA in bytes 7-10. The values are deci-ohms on this
