@@ -51,10 +51,29 @@ assert "uint8_t ack[] = {0x1f, 0x05, this->qn_protocol_type_, 0x10, 0x00}" in sc
 assert "this->qn_protocol_type_ == 0xff && b[4] == 0x02" in scale
 assert "void GEScale::send_qn_history_start_()" in scale
 assert "void GEScale::schedule_qn_stored_retry_()" in scale
-assert "QN Fit Plus stored-result retry %u/%u" in scale
+assert "void GEScale::send_qn_stored_query_()" in scale
+assert "uint8_t query[] = {0x22, 0x06, this->qn_protocol_type_, 0x00, 0x03, 0x00}" in scale
+assert "QN Fit Plus stored-result re-query %u/%u" in scale
 assert "qn_stored_retry_count_ >= MAX_RETRIES" in scale
 assert "this->schedule_qn_stored_retry_();" in scale
 assert "QN stored result has no BIA; waiting for stable 0x10 resistance" in scale
+# First-cycle contract: keep re-querying the stored result through the scale's
+# compute window (verified openScale envelope: 10 attempts, 5 s apart), with the
+# stored-data query frame rather than a vendor history/start replay, and do not
+# stop just because the weight-only estimate fallback already published.
+retry = scale.split("void GEScale::schedule_qn_stored_retry_() {", 1)[1].split("\n}\n", 1)[0]
+assert "this->send_qn_stored_query_();" in retry
+assert "send_qn_history_start_" not in retry
+assert "MAX_RETRIES = 10" in retry
+assert "RETRY_MS = 5000" in retry
+assert "weightonly_published_" not in retry
+assert "this->schedule_qn_stored_retry_();" in retry  # chain covers silent answers
+# A late impedance-bearing 0x23 record on the Fit Plus dialect upgrades the
+# published weight-only reading; records without impedance still cannot.
+stored = scale.split("void GEScale::handle_qn_stored_result_(const uint8_t *b, uint16_t len) {", 1)[1].split(
+    "\n}\n", 1)[0]
+assert "if (len < 17 || this->got_result_)" in stored
+assert "this->weightonly_published_ && !(fitplus_dialect && impedance_valid)" in stored
 request = recording.split("void GEScale::request_wifi_() {", 1)[1].split(
     "void GEScale::maybe_disable_wifi_()", 1)[0]
 assert request.index("!wifi->is_ready()") < request.index("wifi->enable()")

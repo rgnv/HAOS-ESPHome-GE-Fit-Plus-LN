@@ -99,6 +99,8 @@ void GEScale::reset_session_() {
   this->qn_trigger_sent_ = false;
   this->qn_stable_ack_sent_ = false;
   this->qn_stored_retry_count_ = 0;
+  this->qn_stored_retry_pending_ = false;
+  this->cancel_timeout("qn_stored_retry");
   this->qn_protocol_type_ = 0;
   this->qn_info_length_ = 0;
 }
@@ -344,7 +346,7 @@ void GEScale::handle_qn_config_request_() {
 }
 
 void GEScale::handle_qn_stored_result_(const uint8_t *b, uint16_t len) {
-  if (len < 17 || this->got_result_ || this->weightonly_published_)
+  if (len < 17 || this->got_result_)
     return;
   const float weight = static_cast<float>((b[10] << 8) | b[11]) / 100.0f;
   if (weight < MIN_WEIGHT_KG || weight > 300.0f)
@@ -352,8 +354,18 @@ void GEScale::handle_qn_stored_result_(const uint8_t *b, uint16_t len) {
   const int r1 = b[13] | (b[14] << 8);
   const int r2 = b[15] | (b[16] << 8);
   const int impedance = r1 > 0 ? r1 : r2;
+  const bool impedance_valid = impedance >= Z_MIN && impedance <= Z_MAX;
+  // On the 18-byte/0xFF Fit Plus dialect the stored record starts as a
+  // zero-impedance placeholder and is only filled once the scale finishes
+  // computing the weigh-in, which can be later than the weight-only fallback.
+  // A late impedance-bearing record is the same weigh-in and upgrades the
+  // published estimate (finalize_result_ still enforces one BIA result per
+  // session); records without impedance never alter a published reading.
+  const bool fitplus_dialect = this->qn_info_length_ == 18 && this->qn_protocol_type_ == 0xff;
+  if (this->weightonly_published_ && !(fitplus_dialect && impedance_valid))
+    return;
   this->send_qn_measurement_trigger_(weight);
-  if (impedance >= Z_MIN && impedance <= Z_MAX) {
+  if (impedance_valid) {
     this->session_impedances_[0] = static_cast<float>(impedance);
     this->finalize_result_(weight, impedance);
   } else {
@@ -369,20 +381,40 @@ void GEScale::handle_qn_stored_result_(const uint8_t *b, uint16_t len) {
   }
 }
 
+void GEScale::send_qn_stored_query_() {
+  // Stored-data re-query from openScale's QNHandler (verified against a capture
+  // of this protocolType-0xFF family): ask for the history record again without
+  // replaying the vendor history/start exchange, which restarts session state
+  // the active connection already established.
+  uint8_t query[] = {0x22, 0x06, this->qn_protocol_type_, 0x00, 0x03, 0x00};
+  for (int i = 0; i < 5; i++) query[5] = static_cast<uint8_t>(query[5] + query[i]);
+  this->write_char_(this->write_handle_, query, sizeof(query), ESP_GATT_WRITE_TYPE_RSP);
+}
+
 void GEScale::schedule_qn_stored_retry_() {
-  static constexpr uint8_t MAX_RETRIES = 3;
-  static constexpr uint32_t RETRY_MS = 3000;
+  // The scale answers early queries with an empty slot and only stores the
+  // fresh weigh-in after it finishes computing it, while the user is still
+  // standing on it. openScale's verified handler covers that window with up to
+  // 10 re-queries 5 s apart; the weight-only fallback deliberately does not end
+  // the loop, so a late result can still upgrade the estimate.
+  static constexpr uint8_t MAX_RETRIES = 10;
+  static constexpr uint32_t RETRY_MS = 5000;
   if (!this->qn_mode_seen_ || this->qn_info_length_ != 18 || this->qn_protocol_type_ != 0xff ||
-      this->qn_stored_retry_count_ >= MAX_RETRIES || this->got_result_ || this->weightonly_published_)
+      this->qn_stored_retry_pending_ || this->qn_stored_retry_count_ >= MAX_RETRIES || this->got_result_)
     return;
+  this->qn_stored_retry_pending_ = true;
   const uint32_t generation = this->session_generation_;
-  const uint8_t attempt = ++this->qn_stored_retry_count_;
   this->set_timeout("qn_stored_retry", RETRY_MS,
-                    [this, generation, attempt]() {
-                      if (generation != this->session_generation_ || this->got_result_ || this->weightonly_published_)
+                    [this, generation]() {
+                      this->qn_stored_retry_pending_ = false;
+                      if (generation != this->session_generation_ || this->got_result_ ||
+                          this->qn_stored_retry_count_ >= MAX_RETRIES)
                         return;
-                      this->send_qn_history_start_();
-                      ESP_LOGI(TAG, "QN Fit Plus stored-result retry %u/%u", attempt, MAX_RETRIES);
+                      const uint8_t attempt = ++this->qn_stored_retry_count_;
+                      this->send_qn_stored_query_();
+                      ESP_LOGI(TAG, "QN Fit Plus stored-result re-query %u/%u", attempt, MAX_RETRIES);
+                      // Chain the next re-query so a silent answer does not end the window.
+                      this->schedule_qn_stored_retry_();
                     });
 }
 
