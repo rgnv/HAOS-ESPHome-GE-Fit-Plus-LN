@@ -46,6 +46,9 @@ assert "const int r1 = (b[7] << 8) | b[8]" in scale
 assert "const int r2 = (b[9] << 8) | b[10]" in scale
 assert "raw_impedance / 10.0f" in scale
 assert "Stable 0x10 foot-BIA received" in scale
+assert "QN stable weight ACK sent" in scale
+assert "uint8_t ack[] = {0x1f, 0x05, this->qn_protocol_type_, 0x10, 0x00}" in scale
+assert "this->qn_protocol_type_ == 0xff && b[4] == 0x02" in scale
 assert "QN stored result has no BIA; waiting for stable 0x10 resistance" in scale
 request = recording.split("void GEScale::request_wifi_() {", 1)[1].split(
     "void GEScale::maybe_disable_wifi_()", 1)[0]
@@ -82,6 +85,7 @@ with tempfile.TemporaryDirectory(prefix="ge-scale-config-") as directory:
             assert source.count("  reboot_timeout: 5min\n") == 2
             assert "ge_scale:" not in source and "actions:" not in source
         else:
+            assert "  framework:\n    type: esp-idf\n    sdkconfig_options:\n      # The scale advertises briefly; use the full retry window for C6 GATT opens.\n      CONFIG_BT_GATTC_CONNECT_RETRY_COUNT: \"10\"\n" in source
             assert "  - mac_address: !secret ge_scale_mac\n" in source
             assert "    auto_connect: true\n" in source
             assert "  enable_on_boot: false\n" in source

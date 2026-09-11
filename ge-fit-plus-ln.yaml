@@ -14,6 +14,9 @@ esp32:
   board: esp32-c6-devkitc-1
   framework:
     type: esp-idf
+    sdkconfig_options:
+      # The scale advertises briefly; use the full retry window for C6 GATT opens.
+      CONFIG_BT_GATTC_CONNECT_RETRY_COUNT: "10"
 
 logger:
   level: DEBUG

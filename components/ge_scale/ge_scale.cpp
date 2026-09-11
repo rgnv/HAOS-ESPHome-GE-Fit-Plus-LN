@@ -97,6 +97,7 @@ void GEScale::reset_session_() {
   this->qn_ready_sent_ = false;
   this->qn_history_sent_ = false;
   this->qn_trigger_sent_ = false;
+  this->qn_stable_ack_sent_ = false;
   this->qn_protocol_type_ = 0;
   this->qn_info_length_ = 0;
 }
@@ -490,6 +491,18 @@ void GEScale::handle_frame_(const uint8_t *b, uint16_t len) {
       this->last_weight_ = w;
       if (this->qn_mode_seen_ && !this->qn_trigger_sent_)
         this->send_qn_measurement_trigger_(w);
+
+      // The working Bluetooth adapter acknowledges the stable QN weight before
+      // the scale releases its composition/display phase. Mirror that exchange
+      // once per session; the checksum is the sum of preceding bytes.
+      if (this->qn_mode_seen_ && this->qn_protocol_type_ == 0xff && b[4] == 0x02 && !this->qn_stable_ack_sent_) {
+        uint8_t ack[] = {0x1f, 0x05, this->qn_protocol_type_, 0x10, 0x00};
+        for (int i = 0; i < 4; i++)
+          ack[4] = static_cast<uint8_t>(ack[4] + ack[i]);
+        this->qn_stable_ack_sent_ = true;
+        this->write_char_(this->write_handle_, ack, sizeof(ack), ESP_GATT_WRITE_TYPE_RSP);
+        ESP_LOGI(TAG, "QN stable weight ACK sent");
+      }
 
       // The Fit Plus long-frame variant reports a stable state (0x02) with
       // foot-to-foot BIA in bytes 7-10. The values are deci-ohms on this

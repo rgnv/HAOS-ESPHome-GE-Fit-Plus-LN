@@ -139,6 +139,7 @@ class GEScale : public Component, public ble_client::BLEClientNode {
   bool qn_ready_sent_{false};
   bool qn_history_sent_{false};
   bool qn_trigger_sent_{false};
+  bool qn_stable_ack_sent_{false};
   uint8_t qn_protocol_type_{0};
   uint16_t qn_info_length_{0};
   bool save_recordings_(const std::vector<uint8_t> &bytes);
