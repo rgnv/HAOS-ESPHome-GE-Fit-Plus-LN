@@ -140,6 +140,7 @@ class GEScale : public Component, public ble_client::BLEClientNode {
   bool qn_history_sent_{false};
   bool qn_trigger_sent_{false};
   bool qn_stable_ack_sent_{false};
+  uint8_t qn_stored_retry_count_{0};
   uint8_t qn_protocol_type_{0};
   uint16_t qn_info_length_{0};
   bool save_recordings_(const std::vector<uint8_t> &bytes);
@@ -178,6 +179,8 @@ class GEScale : public Component, public ble_client::BLEClientNode {
   void handle_qn_ready_();
   void handle_qn_config_request_();
   void handle_qn_stored_result_(const uint8_t *b, uint16_t len);
+  void schedule_qn_stored_retry_();
+  void send_qn_history_start_();
   void send_qn_measurement_trigger_(float weight_kg);
   void finalize_legacy_result_();
   void finalize_result_(float weight_kg, int z_whole);  // z_whole <= 0 -> weight-only fallback

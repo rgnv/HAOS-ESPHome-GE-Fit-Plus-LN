@@ -49,6 +49,11 @@ assert "Stable 0x10 foot-BIA received" in scale
 assert "QN stable weight ACK sent" in scale
 assert "uint8_t ack[] = {0x1f, 0x05, this->qn_protocol_type_, 0x10, 0x00}" in scale
 assert "this->qn_protocol_type_ == 0xff && b[4] == 0x02" in scale
+assert "void GEScale::send_qn_history_start_()" in scale
+assert "void GEScale::schedule_qn_stored_retry_()" in scale
+assert "QN Fit Plus stored-result retry %u/%u" in scale
+assert "qn_stored_retry_count_ >= MAX_RETRIES" in scale
+assert "this->schedule_qn_stored_retry_();" in scale
 assert "QN stored result has no BIA; waiting for stable 0x10 resistance" in scale
 request = recording.split("void GEScale::request_wifi_() {", 1)[1].split(
     "void GEScale::maybe_disable_wifi_()", 1)[0]

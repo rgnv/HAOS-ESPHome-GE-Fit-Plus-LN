@@ -98,6 +98,7 @@ void GEScale::reset_session_() {
   this->qn_history_sent_ = false;
   this->qn_trigger_sent_ = false;
   this->qn_stable_ack_sent_ = false;
+  this->qn_stored_retry_count_ = 0;
   this->qn_protocol_type_ = 0;
   this->qn_info_length_ = 0;
 }
@@ -293,24 +294,28 @@ void GEScale::handle_qn_ready_() {
   ESP_LOGI(TAG, "QN ready frame received; sent time sync and profile");
 }
 
+void GEScale::send_qn_history_start_() {
+  static const uint8_t VENDOR_HISTORY[] = {0xa0, 0x0d, 0x02, 0xfe, 0xff, 0xee, 0x00,
+                                            0x19, 0x06, 0xf4, 0x04, 0x02, 0xb3};
+  this->write_char_(this->write_handle_, VENDOR_HISTORY, sizeof(VENDOR_HISTORY), ESP_GATT_WRITE_TYPE_RSP);
+  const uint32_t generation = this->session_generation_;
+  this->set_timeout("qn_start", HANDSHAKE_STEP_MS,
+                    [this, generation]() {
+                      if (generation != this->session_generation_)
+                        return;
+                      uint8_t start[] = {0x22, 0x06, this->qn_protocol_type_, 0x00, 0x01, 0x00};
+                      for (int i = 0; i < 5; i++) start[5] = static_cast<uint8_t>(start[5] + start[i]);
+                      this->write_char_(this->write_handle_, start, sizeof(start), ESP_GATT_WRITE_TYPE_RSP);
+                    });
+}
+
 void GEScale::handle_qn_config_request_() {
   if (this->qn_history_sent_)
     return;
   this->qn_mode_seen_ = true;
   this->qn_history_sent_ = true;
   if (this->qn_info_length_ == 18 && this->qn_protocol_type_ == 0xff) {
-    static const uint8_t VENDOR_HISTORY[] = {0xa0, 0x0d, 0x02, 0xfe, 0xff, 0xee, 0x00,
-                                              0x19, 0x06, 0xf4, 0x04, 0x02, 0xb3};
-    this->write_char_(this->write_handle_, VENDOR_HISTORY, sizeof(VENDOR_HISTORY), ESP_GATT_WRITE_TYPE_RSP);
-    const uint32_t generation = this->session_generation_;
-    this->set_timeout("qn_start", HANDSHAKE_STEP_MS,
-                      [this, generation]() {
-                        if (generation != this->session_generation_)
-                          return;
-                        uint8_t start[] = {0x22, 0x06, this->qn_protocol_type_, 0x00, 0x01, 0x00};
-                        for (int i = 0; i < 5; i++) start[5] = static_cast<uint8_t>(start[5] + start[i]);
-                        this->write_char_(this->write_handle_, start, sizeof(start), ESP_GATT_WRITE_TYPE_RSP);
-                      });
+    this->send_qn_history_start_();
     ESP_LOGI(TAG, "QN Fit Plus config request; sent vendor history response and start");
     return;
   }
@@ -360,7 +365,25 @@ void GEScale::handle_qn_stored_result_(const uint8_t *b, uint16_t len) {
       this->last_weight_change_ms_ = millis();
     this->last_weight_ = weight;
     ESP_LOGD(TAG, "QN stored result has no BIA; waiting for stable 0x10 resistance");
+    this->schedule_qn_stored_retry_();
   }
+}
+
+void GEScale::schedule_qn_stored_retry_() {
+  static constexpr uint8_t MAX_RETRIES = 3;
+  static constexpr uint32_t RETRY_MS = 3000;
+  if (!this->qn_mode_seen_ || this->qn_info_length_ != 18 || this->qn_protocol_type_ != 0xff ||
+      this->qn_stored_retry_count_ >= MAX_RETRIES || this->got_result_ || this->weightonly_published_)
+    return;
+  const uint32_t generation = this->session_generation_;
+  const uint8_t attempt = ++this->qn_stored_retry_count_;
+  this->set_timeout("qn_stored_retry", RETRY_MS,
+                    [this, generation, attempt]() {
+                      if (generation != this->session_generation_ || this->got_result_ || this->weightonly_published_)
+                        return;
+                      this->send_qn_history_start_();
+                      ESP_LOGI(TAG, "QN Fit Plus stored-result retry %u/%u", attempt, MAX_RETRIES);
+                    });
 }
 
 void GEScale::send_qn_measurement_trigger_(float weight_kg) {
@@ -517,6 +540,8 @@ void GEScale::handle_frame_(const uint8_t *b, uint16_t len) {
           this->session_impedances_[0] = static_cast<float>(impedance);
           ESP_LOGI(TAG, "Stable 0x10 foot-BIA received: %.2f kg, internal Z=%d", w, impedance);
           this->finalize_result_(w, impedance);
+        } else {
+          this->schedule_qn_stored_retry_();
         }
       }
     }
